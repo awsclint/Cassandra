@@ -1,0 +1,3660 @@
+{
+   "AWSTemplateFormatVersion":"2010-09-09",
+   "Description":"(0017) Cassandra cluster CloudFormation template file.",
+   "Parameters":{
+      "VpcId":{
+         "Description":"VpcId of your existing Virtual Private Cloud (VPC)",
+         "Type":"AWS::EC2::VPC::Id"
+      },
+      "FirstSubnetId":{
+         "Description":"First subnet ID in your Virtual Private Cloud (VPC)",
+         "Type":"AWS::EC2::Subnet::Id"
+      },
+      "SecondSubnetId":{
+         "Description":"Second subnet ID in your Virtual Private Cloud (VPC)",
+         "Type":"AWS::EC2::Subnet::Id"
+      },
+      "ThirdSubnetId":{
+         "Description":"Third subnet ID in your Virtual Private Cloud (VPC)",
+         "Type":"AWS::EC2::Subnet::Id"
+      },
+      "BuildBucket": {
+            "Description": "Main Bucket where the templates/scripts are installed. Do not change.",
+            "Type": "String",
+            "Default": "quickstart-reference/cassandra/latest"
+      },
+      "DMZSubnet":{
+         "Description":"This should be a public Subnet within the same VPC. This subnet will host opscenter.",
+         "Type":"AWS::EC2::Subnet::Id"
+      },
+      "SSHKeyName":{
+         "Description":"Name of an existing EC2 KeyPair to enable SSH access to the instances",
+         "Type":"AWS::EC2::KeyPair::KeyName"
+      },
+      "CIDRToWhitelist":{
+         "Description":"Internal VPC IP CIDR for internal communication for Cassandra",
+         "Type":"String",
+         "MinLength":"9",
+         "MaxLength":"18",
+         "Default":"0.0.0.0/0",
+         "AllowedPattern":"(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+         "ConstraintDescription":"must be a valid CIDR range of the form x.x.x.x/x."
+      },
+      "RemoteAccessCIDR":{
+         "Description":"IP CIDR from where you could SSH into Cassandra cluster",
+         "Type":"String",
+         "MinLength":"9",
+         "MaxLength":"18",
+         "Default":"0.0.0.0/0",
+         "AllowedPattern":"(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+         "ConstraintDescription":"must be a valid CIDR range of the form x.x.x.x/x."
+      },
+      "InstanceType":{
+         "Description":"EC2 instance type",
+         "Type":"String",
+         "Default":"m3.2xlarge",
+         "AllowedValues":[
+            "m3.medium",
+            "m3.large",
+            "m3.xlarge",
+            "m3.2xlarge",
+            "m4.large",
+            "m4.xlarge",
+            "m4.2xlarge",
+            "m4.4xlarge",
+            "m4.10xlarge",
+            "c3.large",
+            "c3.xlarge",
+            "c3.2xlarge",
+            "c3.4xlarge",
+            "c3.8xlarge",
+            "c4.large",
+            "c4.xlarge",
+            "c4.2xlarge",
+            "c4.4xlarge",
+            "c4.8xlarge",
+            "r3.large",
+            "r3.xlarge",
+            "r3.2xlarge",
+            "r3.4xlarge",
+            "r3.8xlarge",
+            "i2.xlarge",
+            "i2.2xlarge",
+            "i2.4xlarge",
+            "i2.8xlarge",
+            "d2.xlarge",
+            "d2.2xlarge",
+            "d2.4xlarge",
+            "d2.8xlarge"
+         ],
+         "ConstraintDescription":"must be a valid EC2 instance type."
+      },
+      "OpscenterInstanceType":{
+         "Description":"EC2 instance type for Opscenter. We will launch one instance.",
+         "Type":"String",
+         "Default":"t2.micro",
+         "AllowedValues":[
+            "m3.medium",
+            "m3.large",
+            "m3.xlarge",
+            "m3.2xlarge",
+            "t2.micro",
+            "t2.nano",
+            "t2.small",
+            "t2.medium",
+            "t2.large"
+         ],
+         "ConstraintDescription":"must be a valid EC2 instance type."
+      },
+      "FleetSize":{
+         "Description":"Number of Non Seed nodes in the cluster",
+         "Type":"Number",
+         "Default":"3",
+         "MaxValue":"300",
+         "MinValue":"1"
+      },
+      "numberofSeedServers":{
+         "Description":"Number of Seed nodes in the cluster. Enter a value between 1 and 3.",
+         "Type":"Number",
+         "Default":"1",
+         "MaxValue":"3",
+         "MinValue":"1"
+      },
+      "ClusterName":{
+         "Default":"Cassandra Cluster",
+         "Description":"The name of this Cassandra cluster",
+         "Type":"String"
+      },
+      "CassandraVersion":{
+         "Default":"2.0",
+         "Description":"Cassandra Version",
+         "Type":"String",
+         "AllowedValues":[
+            "2.0",
+            "2.1"
+         ],
+         "ConstraintDescription":"only Version 2.0 and 2.1 are allowed"
+      },
+      "JavaVersion":{
+         "Default":"Java7",
+         "Description":"Java Version",
+         "Type":"String",
+         "AllowedValues":[
+            "Java7",
+            "Java8"
+         ],
+         "ConstraintDescription":"only Java7 or Java8 version allowed"
+      },
+      "CommitlogVolumeSize":{
+         "Description":"Size of EBS volume in GB, if creating a new one",
+         "Type":"Number",
+         "Default":"10",
+         "MaxValue":"16384",
+         "MinValue":"10"
+      },
+      "CommitlogVolumeType":{
+         "Description":"Type of volume to create either new or from snapshot",
+         "Type":"String",
+         "Default":"gp2",
+         "ConstraintDescription":"must be a supported volume type: standard, io1, gp2",
+         "AllowedValues":[
+            "standard",
+            "gp2",
+            "io1"
+         ]
+      },
+      "CommitlogVolumeIOPS":{
+         "Description":"Number of IOPS for volume type io1. Not used for standard volumes.",
+         "Type":"Number",
+         "Default":"100",
+         "MaxValue":"20000",
+         "MinValue":"100"
+      },
+      "DataVolumeSize":{
+         "Description":"Size of EBS volume in GB, if creating a new one",
+         "Type":"Number",
+         "Default":"100",
+         "MaxValue":"16384",
+         "MinValue":"10"
+      },
+      "DataVolumeType":{
+         "Description":"Type of volume to create either new or from snapshot",
+         "Type":"String",
+         "Default":"gp2",
+         "ConstraintDescription":"must be a supported volume type: standard, io1, gp2",
+         "AllowedValues":[
+            "standard",
+            "gp2",
+            "io1"
+         ]
+      },
+      "DataVolumeIOPS":{
+         "Description":"Number of IOPS for volume type io1. Not used for standard volumes.",
+         "Type":"Number",
+         "Default":"100",
+         "MaxValue":"20000",
+         "MinValue":"100"
+      },
+      "Encryptionrequired":{
+         "Description":"Is Encryption required on the volumes.",
+         "Type":"String",
+         "Default":"No",
+         "AllowedValues":[
+            "Yes",
+            "No"
+         ]
+      },
+      "KMSKeyId":{
+         "Description":"KMS Key Id(ARN) for encryption master key. If left null, default master key from KMS will be used.",
+         "Type":"String"
+      }
+   },
+   "Conditions":{
+      "Installdsc20":{
+         "Fn::Equals":[
+            {
+               "Ref":"CassandraVersion"
+            },
+            "2.0"
+         ]
+      },
+      "UseEBSPIOPScommitlog":{
+         "Fn::Equals":[
+            {
+               "Ref":"CommitlogVolumeType"
+            },
+            "io1"
+         ]
+      },
+      "UseEBSPIOPSdata":{
+         "Fn::Equals":[
+            {
+               "Ref":"DataVolumeType"
+            },
+            "io1"
+         ]
+      },
+      "UseEncryption":{
+         "Fn::Equals":[
+            {
+               "Ref":"Encryptionrequired"
+            },
+            "Yes"
+         ]
+      },
+      "UseKMSKey":{
+         "Fn::Equals":[
+            {
+               "Ref":"KMSKeyId"
+            },
+            ""
+         ]
+      },
+      "Installjava7":{
+         "Fn::Equals":[
+            {
+               "Ref":"JavaVersion"
+            },
+            "Java7"
+         ]
+      },
+      "LaunchSecondSeed":{
+         "Fn::Or":[
+            {
+               "Fn::Equals":[
+                  {
+                     "Ref":"numberofSeedServers"
+                  },
+                  "2"
+               ]
+            },
+            {
+               "Fn::Equals":[
+                  {
+                     "Ref":"numberofSeedServers"
+                  },
+                  "3"
+               ]
+            }
+         ]
+      },
+      "LaunchThirdSeed":{
+         "Fn::Equals":[
+            {
+               "Ref":"numberofSeedServers"
+            },
+            "3"
+         ]
+      }
+   },
+   "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [{
+                    "Label": {
+                        "default": "Network Stack"
+                    },
+                    "Description": {
+                        "default": "Enter VPC related information"
+                    },
+                    "Parameters": ["VpcId", "FirstSubnetId", "SecondSubnetId", "ThirdSubnetId", "DMZSubnet"]
+                }, {
+                    "Label": {
+                        "default": "EC2 Instance Configuration"
+                    },
+                    "Description": {
+                        "default": "Choice of Instance type and number of nodes configuration"
+                    },
+                    "Parameters": ["InstanceType", "OpscenterInstanceType", "BastionInstanceType", "FleetSize", "numberofSeedServers", "SSHKeyName", "RemoteAccessCIDR", "CIDRToWhitelist"]
+                },
+                {
+                    "Label": {
+                        "default": "Storage Parameters"
+                    },
+                    "Description": {
+                        "default": "Enter the EBS volume size and IOPS settings"
+                    },
+                    "Parameters": ["CommitlogVolumeType", "CommitlogVolumeSize", "CommitlogVolumeIOPS", "DataVolumeType", "DataVolumeSize", "DataVolumeIOPS"]
+                },
+                {
+                    "Label": {
+                        "default": "S3 path containing scripts for installation"
+                    },
+                    "Description": {
+                        "default": "Main Bucket where the templates/scripts are installed. Do not change."
+                    },
+                    "Parameters": ["BuildBucket"]
+                },
+                {
+                    "Label": {
+                        "default": "Cassandra Cluster Information"
+                    },
+                    "Description": {
+                        "default": "Enter Cluster Information"
+                    },
+                    "Parameters": ["ClusterName", "CassandraVersion", "JavaVersion"]
+                }, 
+                {
+                    "Label": {
+                        "default": "Encryption Settings(optional)"
+                    },
+                    "Description": {
+                        "default": "Modify if you require encryption."
+                    },
+                    "Parameters": ["Encryptionrequired", "KMSKeyId"]
+                }
+            ],
+            "ParameterLabels": {
+                "VpcId": {
+                    "default": "Enter VPC ID"
+                },
+                "FirstSubnetId": {
+                    "default": "Enter First Subnet ID"
+                },
+                "SecondSubnetId": {
+                    "default": "Enter Second Subnet ID"
+                },
+                "ThirdSubnetId": {
+                    "default": "Enter Third Subnet ID"
+                },
+                "DMZSubnet": {
+                    "default": "Public subnet to host opscenter"
+                },
+                "InstanceType": {
+                    "default": "Enter Instance Type for seed and non-seed nodes"
+                },
+                "OpscenterInstanceType": {
+                    "default": "Enter Instance Type for opscenter"
+                },
+                "BastionInstanceType": {
+                    "default": "Enter Instance Type for Bastion server"
+                },
+                "FleetSize": {
+                    "default": "Enter number of non-seed nodes to launch"
+                },
+                "numberofSeedServers": {
+                    "default": "Enter number of seed nodes to launch"
+                },
+                "SSHKeyName": {
+                    "default": "Enter SSH Key pair name"
+                },
+                "RemoteAccessCIDR": {
+                    "default": "Enter remote CIDR to allow access"
+                },
+                "CIDRToWhitelist": {
+                    "default": "Internal CIDR IP range to whitelist"
+                },
+                "CommitlogVolumeType": {
+                    "default": "Choose GP2/io1 for CommitlogVolume"
+                },
+                "CommitlogVolumeSize": {
+                    "default": "Enter size in GB for commit log"
+                },
+                "CommitlogVolumeIOPS": {
+                    "default": "Enter number of IOPS required for commitlog"
+                },
+                "DataVolumeType": {
+                    "default": "Choose GP2/io1 for DataVolume"
+                },
+                "DataVolumeSize": {
+                    "default": "Enter size in GB for Data volume"
+                },
+                "DataVolumeIOPS": {
+                    "default": "Enter number of IOPS required for Data volume"
+                },
+                "BuildBucket": {
+                    "default": "Enter configuration bucket for build scripts"
+                },
+                "ClusterName": {
+                    "default": "Enter name of Cassandra cluster"
+                },
+                "CassandraVersion": {
+                    "default": "Enter Version of Cassandra cluster"
+                },
+                "JavaVersion": {
+                    "default": "Enter Version of Java"
+                },
+                "Encryptionrequired": {
+                    "default": "Is encryption required?"
+                },
+                "KMSKeyId": {
+                    "default": "Optionally enter KMS Key ID if encryption is required"
+                }
+            }
+        }
+    },
+   "Mappings":{
+      "AWSInstanceType2Capabilites":{
+         "m3.medium":{
+            "Arch":"64HVM",
+            "EBSOpt":"False"
+         },
+         "m3.large":{
+            "Arch":"64HVM",
+            "EBSOpt":"False"
+         },
+         "m3.xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "m3.2xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "c3.8xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"False"
+         },
+         "c3.4xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "c3.2xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "c3.xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "c3.large":{
+            "Arch":"64HVM",
+            "EBSOpt":"False"
+         },
+         "c4.8xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "c4.4xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "c4.2xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "c4.xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "c4.large":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "r3.8xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"False"
+         },
+         "r3.4xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "r3.2xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "r3.xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "r3.large":{
+            "Arch":"64HVM",
+            "EBSOpt":"False"
+         },
+         "i2.8xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"False"
+         },
+         "i2.4xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "i2.2xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "i2.xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "i2.large":{
+            "Arch":"64HVM",
+            "EBSOpt":"False"
+         },
+         "m4.10xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "m4.4xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "m4.2xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "m4.xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "m4.large":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "d2.8xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "d2.4xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "d2.2xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         },
+         "d2.xlarge":{
+            "Arch":"64HVM",
+            "EBSOpt":"True"
+         }
+      },
+      "AWSAmazonLinuxAMI":{
+         "us-east-1":{
+            "name":"Virginia",
+            "201503":"ami-60b6c60a"
+         },
+         "us-west-2":{
+            "name":"Oregon",
+            "201503":"ami-f0091d91"
+         },
+         "us-west-1":{
+            "name":"California",
+            "201503":"ami-d5ea86b5"
+         },
+         "eu-west-1":{
+            "name":"Ireland",
+            "201503":"ami-bff32ccc"
+         },
+         "eu-west-2":{
+            "name":"Frankfurt",
+            "201503":"ami-bc5b48d0"
+         },
+         "ap-southeast-1":{
+            "name":"Singapore",
+            "201503":"ami-c9b572aa"
+         },
+         "ap-southeast-2":{
+            "name":"Sydney",
+            "201503":"ami-48d38c2b"
+         },
+         "ap-northeast-1":{
+            "name":"Tokyo",
+            "201503":"ami-383c1956"
+         },
+         "sa-east-1":{
+            "name":"SaoPaulo",
+            "201503":"ami-6817af04"
+         }
+      }
+   },
+   "Resources":{
+      "CassandraRole":{
+         "Type":"AWS::IAM::Role",
+         "Properties":{
+            "AssumeRolePolicyDocument":{
+               "Statement":[
+                  {
+                     "Effect":"Allow",
+                     "Principal":{
+                        "Service":[
+                           "ec2.amazonaws.com",
+                           "autoscaling.amazonaws.com"
+                        ]
+                     },
+                     "Action":[
+                        "sts:AssumeRole"
+                     ]
+                  }
+               ]
+            },
+            "Path":"/",
+            "Policies":[
+               {
+                  "PolicyName":"CassandraPolicy",
+                  "PolicyDocument":{
+                     "Statement":[
+                        {
+                           "Effect":"Allow",
+                           "Action":[
+                              "s3:*",
+                              "ec2:Describe*",
+                              "ec2:AttachNetworkInterface",
+                              "ec2:AttachVolume",
+                              "ec2:CreateTags",
+                              "ec2:CreateVolume",
+                              "ec2:RunInstances",
+                              "ec2:StartInstances",
+                              "ec2:DeleteVolume",
+                              "ec2:CreateSecurityGroup",
+                              "ec2:CreateSnapshot",
+                              "autoscaling:*"
+                           ],
+                           "Resource":"*"
+                        },
+                        {
+                           "Effect":"Allow",
+                           "Action":[
+                              "dynamodb:*",
+                              "dynamodb:Scan",
+                              "dynamodb:Query",
+                              "dynamodb:GetItem",
+                              "dynamodb:BatchGetItem",
+                              "dynamodb:UpdateTable"
+                           ],
+                           "Resource":[
+                              "*"
+                           ]
+                        }
+                     ]
+                  }
+               }
+            ]
+         }
+      },
+      "CassandraProfile":{
+         "Type":"AWS::IAM::InstanceProfile",
+         "Properties":{
+            "Roles":[
+               {
+                  "Ref":"CassandraRole"
+               }
+            ]
+         }
+      },
+      "CassandraSecurityGroup":{
+         "Type":"AWS::EC2::SecurityGroup",
+         "Properties":{
+            "GroupDescription":"Enable access for Communication(Trim as Needed)",
+            "VpcId":{
+               "Ref":"VpcId"
+            },
+            "SecurityGroupIngress":[
+               {
+                  "IpProtocol":"tcp",
+                  "FromPort":"7000",
+                  "ToPort":"7001",
+                  "CidrIp":{
+                     "Ref":"CIDRToWhitelist"
+                  }
+               },
+               {
+                  "IpProtocol":"tcp",
+                  "FromPort":"7199",
+                  "ToPort":"7199",
+                  "CidrIp":{
+                     "Ref":"CIDRToWhitelist"
+                  }
+               },
+               {
+                  "IpProtocol":"tcp",
+                  "FromPort":"9042",
+                  "ToPort":"9042",
+                  "CidrIp":{
+                     "Ref":"CIDRToWhitelist"
+                  }
+               },
+               {
+                  "IpProtocol":"tcp",
+                  "FromPort":"9160",
+                  "ToPort":"9160",
+                  "CidrIp":{
+                     "Ref":"CIDRToWhitelist"
+                  }
+               },
+               {
+                  "IpProtocol":"tcp",
+                  "FromPort":"22",
+                  "ToPort":"22",
+                  "CidrIp":{
+                     "Ref":"CIDRToWhitelist"
+                  }
+               },
+               {
+                  "IpProtocol":"tcp",
+                  "FromPort":"22",
+                  "ToPort":"22",
+                  "CidrIp":{
+                     "Ref":"RemoteAccessCIDR"
+                  }
+               },
+               {
+                  "IpProtocol":"tcp",
+                  "FromPort":"61620",
+                  "ToPort":"61621",
+                  "CidrIp":{
+                     "Ref":"CIDRToWhitelist"
+                  }
+               }
+            ],
+            "SecurityGroupEgress":[
+               {
+                  "IpProtocol":"-1",
+                  "CidrIp":"0.0.0.0/0",
+                  "FromPort":"1",
+                  "ToPort":"65535"
+               }
+            ]
+         }
+      },
+      "OpsCenterSecurityGroup":{
+         "Type":"AWS::EC2::SecurityGroup",
+         "Properties":{
+            "GroupDescription":"Enable access for Communication for Opscenter",
+            "VpcId":{
+               "Ref":"VpcId"
+            },
+            "SecurityGroupIngress":[
+               {
+                  "IpProtocol":"tcp",
+                  "FromPort":"8888",
+                  "ToPort":"8888",
+                  "CidrIp":{
+                     "Ref":"RemoteAccessCIDR"
+                  }
+               },
+               {
+                  "IpProtocol":"tcp",
+                  "FromPort":"61620",
+                  "ToPort":"61621",
+                  "CidrIp":{
+                     "Ref":"CIDRToWhitelist"
+                  }
+               },
+               {
+                  "IpProtocol":"tcp",
+                  "FromPort":"22",
+                  "ToPort":"22",
+                  "CidrIp":{
+                     "Ref":"RemoteAccessCIDR"
+                  }
+               }
+            ],
+            "SecurityGroupEgress":[
+               {
+                  "IpProtocol":"-1",
+                  "CidrIp":"0.0.0.0/0",
+                  "FromPort":"1",
+                  "ToPort":"65535"
+               }
+            ]
+         }
+      },
+      "FirstSeedENI":{
+         "Type":"AWS::EC2::NetworkInterface",
+         "Properties":{
+            "SubnetId":{
+               "Ref":"FirstSubnetId"
+            },
+            "Description":"ENI for First Seed",
+            "GroupSet":[
+               {
+                  "Ref":"CassandraSecurityGroup"
+               }
+            ],
+            "SourceDestCheck":"true",
+            "Tags":[
+               {
+                  "Key":"Network",
+                  "Value":"Control"
+               }
+            ]
+         }
+      },
+      "SecondSeedENI":{
+         "Type":"AWS::EC2::NetworkInterface",
+         "Condition":"LaunchSecondSeed",
+         "Properties":{
+            "SubnetId":{
+               "Ref":"SecondSubnetId"
+            },
+            "Description":"ENI for Second Seed",
+            "GroupSet":[
+               {
+                  "Ref":"CassandraSecurityGroup"
+               }
+            ],
+            "SourceDestCheck":"true",
+            "Tags":[
+               {
+                  "Key":"Network",
+                  "Value":"Control"
+               }
+            ]
+         }
+      },
+      "ThirdSeedENI":{
+         "Type":"AWS::EC2::NetworkInterface",
+         "Condition":"LaunchThirdSeed",
+         "Properties":{
+            "SubnetId":{
+               "Ref":"ThirdSubnetId"
+            },
+            "Description":"ENI for Third Seed",
+            "GroupSet":[
+               {
+                  "Ref":"CassandraSecurityGroup"
+               }
+            ],
+            "SourceDestCheck":"true",
+            "Tags":[
+               {
+                  "Key":"Network",
+                  "Value":"Control"
+               }
+            ]
+         }
+      },
+      "dynamoDBstatetable":{
+         "Type":"AWS::DynamoDB::Table",
+         "DependsOn":"FirstSeedENI",
+         "Properties":{
+            "AttributeDefinitions":[
+               {
+                  "AttributeName":"instanceid",
+                  "AttributeType":"S"
+               }
+            ],
+            "KeySchema":[
+               {
+                  "AttributeName":"instanceid",
+                  "KeyType":"HASH"
+               }
+            ],
+            "ProvisionedThroughput":{
+               "ReadCapacityUnits":"5",
+               "WriteCapacityUnits":"5"
+            },
+            "TableName":"cassandraasgreplace"
+         }
+      },
+      "OpsCenterENI":{
+         "Type":"AWS::EC2::NetworkInterface",
+         "DependsOn":[
+            "OpsCenterSecurityGroup"
+         ],
+         "Properties":{
+            "SubnetId":{
+               "Ref":"DMZSubnet"
+            },
+            "Description":"ENI for OpsCenter",
+            "GroupSet":[
+               {
+                  "Ref":"OpsCenterSecurityGroup"
+               }
+            ],
+            "SourceDestCheck":"true",
+            "Tags":[
+               {
+                  "Key":"Network",
+                  "Value":"Control"
+               }
+            ]
+         }
+      },
+      "opscenterEIP":{
+         "Type":"AWS::EC2::EIP",
+         "Properties":{
+            "Domain":"vpc"
+         }
+      },
+      "AssociateopscenterENItoEIP":{
+         "Type":"AWS::EC2::EIPAssociation",
+         "DependsOn":[
+            "opscenterEIP",
+            "OpsCenterENI"
+         ],
+         "Properties":{
+            "AllocationId":{
+               "Fn::GetAtt":[
+                  "opscenterEIP",
+                  "AllocationId"
+               ]
+            },
+            "NetworkInterfaceId":{
+               "Ref":"OpsCenterENI"
+            }
+         }
+      },
+      "opscenterServer":{
+         "Type":"AWS::AutoScaling::AutoScalingGroup",
+         "DependsOn":[
+            "AssociateopscenterENItoEIP",
+            "OpsCenterSecurityGroup",
+            "CassandraProfile"
+         ],
+         "UpdatePolicy":{
+            "AutoScalingRollingUpdate":{
+               "MaxBatchSize":"1",
+               "MinInstancesInService":"1",
+               "PauseTime":"PT2M30S"
+            }
+         },
+         "Properties":{
+            "VPCZoneIdentifier":[
+               {
+                  "Ref":"DMZSubnet"
+               }
+            ],
+            "LaunchConfigurationName":{
+               "Ref":"opscenterServerLaunchConfig"
+            },
+            "MinSize":"1",
+            "MaxSize":"1",
+            "DesiredCapacity":"1",
+            "Tags":[
+               {
+                  "Key":"Name",
+                  "Value":"Cassandra-opscenter",
+                  "PropagateAtLaunch":"true"
+               }
+            ]
+         },
+         "CreationPolicy":{
+            "ResourceSignal":{
+               "Timeout":"PT30M",
+               "Count":"1"
+            }
+         }
+      },
+      "opscenterServerLaunchConfig":{
+         "Type":"AWS::AutoScaling::LaunchConfiguration",
+         "DependsOn":[
+            "AssociateopscenterENItoEIP",
+            "OpsCenterSecurityGroup",
+            "CassandraProfile"
+         ],
+         "Properties":{
+            "InstanceType":{
+               "Ref":"OpscenterInstanceType"
+            },
+            "BlockDeviceMappings":[
+               {
+                  "DeviceName":"/dev/xvda",
+                  "Ebs":{
+                     "VolumeSize":"50",
+                     "VolumeType":"gp2"
+                  }
+               }
+            ],
+            "KeyName":{
+               "Ref":"SSHKeyName"
+            },
+            "ImageId":{
+               "Fn::FindInMap":[
+                  "AWSAmazonLinuxAMI",
+                  {
+                     "Ref":"AWS::Region"
+                  },
+                  "201503"
+               ]
+            },
+            "SecurityGroups":[
+               {
+                  "Ref":"OpsCenterSecurityGroup"
+               }
+            ],
+            "IamInstanceProfile":{
+               "Ref":"CassandraProfile"
+            },
+            "InstanceMonitoring":"false",
+            "UserData":{
+               "Fn::Base64":{
+                  "Fn::Join":[
+                     "",
+                     [
+                        "#! /bin/bash -v\n",
+                        "mkdir -p /home/ec2-user/cassandra \n",
+                        "cd /home/ec2-user/cassandra \n",
+                        "sleep 30; \n",
+                        "until ping -c 1 google.com \n",
+                        "do \n",
+                        "sleep 5; \n",
+                        "done \n",
+                        "yum update -y aws-cfn-bootstrap\n",
+                        "aws ec2 attach-network-interface --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " --network-interface-id ",
+                        {
+                           "Ref":"OpsCenterENI"
+                        },
+                        " --instance-id `curl -s curl http://169.254.169.254/latest/meta-data/instance-id` --device-index 1\n",
+                        "aws s3 cp s3://",
+                        {
+                           "Ref": "BuildBucket"
+                        },
+                        "/scripts/installOpscenter.sh installOpscenter.sh\n",
+                        "chmod +x installOpscenter.sh \n",
+                        "./installOpscenter.sh > install.log 2>&1 \n",
+                        "# Helper function\n",
+                        "function error_exit\n",
+                        "{\n",
+                        "  /opt/aws/bin/cfn-signal -e 1 --reason=\"$1\" --stack ",
+                        {
+                           "Ref":"AWS::StackName"
+                        },
+                        " --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " --resource=opscenterServer \n",
+                        "  exit 1\n",
+                        "}\n",
+                        "# Install packages\n",
+                        "/opt/aws/bin/cfn-init -s ",
+                        {
+                           "Ref":"AWS::StackId"
+                        },
+                        " -r opscenterServerLaunchConfig ",
+                        "    --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        "\n",
+                        "# All is well so signal success\n",
+                        "  /opt/aws/bin/cfn-signal -e 0 --reason=\"SeedServer setup complete\" --stack ",
+                        {
+                           "Ref":"AWS::StackName"
+                        },
+                        " --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " --resource=opscenterServer \n"
+                     ]
+                  ]
+               }
+            }
+         },
+         "Metadata":{
+            "AWS::CloudFormation::Init":{
+               "configSets":{
+                  "default":[
+                     "configure_hosts",
+                     {
+                        "Fn::If":[
+                           "Installjava7",
+                           "install_java7",
+                           "install_java8"
+                        ]
+                     },
+                     "install_jna",
+                     "install_opscenter",
+                     "z_install_monit"
+                  ]
+               },
+               "configure_hosts":{
+                  "commands":{
+                     "01-create_hosts_entry-on_boot":{
+                        "command":"echo \"`curl -s curl http://169.254.169.254/latest/meta-data/local-ipv4` `hostname`\" >>/etc/hosts",
+                        "test":"test ! -f .create_hosts_entry-semaphore"
+                     },
+                     "02-signal_startup_complete":{
+                        "command":"touch .create_hosts_entry-semaphore"
+                     }
+                  }
+               },
+               "configure_eni":{
+                  "commands":{
+                     "01-attach_eni":{
+                        "command":"echo \"`curl -s curl http://169.254.169.254/latest/meta-data/local-ipv4` `hostname`\" >>/etc/hosts",
+                        "test":"test ! -f .create_hosts_entry-semaphore"
+                     },
+                     "02-signal_startup_complete":{
+                        "command":"touch .create_hosts_entry-semaphore"
+                     }
+                  }
+               },
+               "install_java7":{
+                  "packages":{
+                     "yum":{
+                        "java-1.7.0-openjdk-devel":[
+
+                        ]
+                     }
+                  },
+                  "commands":{
+                     "use_java7":{
+                        "command":"alternatives --set java /usr/lib/jvm/jre-1.7.0-openjdk.x86_64/bin/java"
+                     }
+                  }
+               },
+               "install_java8":{
+                  "packages":{
+                     "yum":{
+                        "java-1.8.0-openjdk-devel":[
+
+                        ]
+                     }
+                  },
+                  "commands":{
+                     "use_java8":{
+                        "command":"alternatives --set java /usr/lib/jvm/jre-1.8.0-openjdk.x86_64/bin/java"
+                     }
+                  }
+               },
+               "install_jna":{
+                  "packages":{
+                     "yum":{
+                        "jna":[
+
+                        ]
+                     }
+                  }
+               },
+               "install_opscenter":{
+                  "services":{
+                     "sysvinit":{
+                        "opscenterd":{
+                           "enabled":"true",
+                           "ensureRunning":"true"
+                        }
+                     }
+                  }
+               },
+               "z_install_monit":{
+                  "packages":{
+                     "yum":{
+                        "monit":[
+
+                        ]
+                     }
+                  },
+                  "files":{
+                     "/etc/monit.d/opscentermonit":{
+                        "content":{
+                           "Fn::Join":[
+                              "",
+                              [
+                                 "set daemon 180 with start delay 60 \n",
+                                 "check opscenterd matching \"opscenterd\" \n",
+                                 "    start program = \"/etc/init.d/opscenterd start\" \n",
+                                 "    stop program = \"/etc/init.d/opscenterd stop\" \n"
+                              ]
+                           ]
+                        }
+                     }
+                  },
+                  "services":{
+                     "sysvinit":{
+                        "monit":{
+                           "enabled":"true",
+                           "ensureRunning":"true"
+                        }
+                     }
+                  }
+               }
+            }
+         }
+      },
+      "SeedServer":{
+         "Type":"AWS::AutoScaling::AutoScalingGroup",
+         "DependsOn":[
+            "FirstSeedENI",
+            "OpsCenterENI"
+         ],
+         "UpdatePolicy":{
+            "AutoScalingRollingUpdate":{
+               "MaxBatchSize":"1",
+               "MinInstancesInService":"1",
+               "PauseTime":"PT2M30S"
+            }
+         },
+         "Properties":{
+            "VPCZoneIdentifier":[
+               {
+                  "Ref":"FirstSubnetId"
+               }
+            ],
+            "LaunchConfigurationName":{
+               "Ref":"CassandraSeedServerLaunchConfig"
+            },
+            "MinSize":"1",
+            "MaxSize":"1",
+            "DesiredCapacity":"1",
+            "Tags":[
+               {
+                  "Key":"Name",
+                  "Value":"Cassandra-FirstSeedServer",
+                  "PropagateAtLaunch":"true"
+               }
+            ]
+         },
+         "CreationPolicy":{
+            "ResourceSignal":{
+               "Timeout":"PT30M",
+               "Count":"1"
+            }
+         }
+      },
+      "CassandraSeedServerLaunchConfig":{
+         "Type":"AWS::AutoScaling::LaunchConfiguration",
+         "DependsOn":[
+            "CassandraSecurityGroup",
+            "CassandraProfile",
+            "FirstSeedENI",
+            "OpsCenterENI"
+         ],
+         "Properties":{
+            "InstanceType":{
+               "Ref":"InstanceType"
+            },
+            "BlockDeviceMappings":[
+               {
+                  "DeviceName":"/dev/xvdba",
+                  "Ebs":{
+                     "VolumeSize":{
+                        "Ref":"DataVolumeSize"
+                     },
+                     "VolumeType":{
+                        "Ref":"DataVolumeType"
+                     },
+                     "Iops":{
+                        "Fn::If":[
+                           "UseEBSPIOPSdata",
+                           {
+                              "Ref":"DataVolumeIOPS"
+                           },
+                           {
+                              "Ref":"AWS::NoValue"
+                           }
+                        ]
+                     },
+                     "Encrypted":{
+                        "Fn::If":[
+                           "UseEncryption",
+                           "True",
+                           "False"
+                        ]
+                     },
+                     "KmsKeyId":{
+                        "Fn::If":[
+                           "UseKMSKey",
+                           {
+                              "Ref":"AWS::NoValue"
+                           },
+                           {
+                              "Ref":"KMSKeyId"
+                           }
+                        ]
+                     }
+                  }
+               },
+               {
+                  "DeviceName":"/dev/xvdbb",
+                  "Ebs":{
+                     "VolumeSize":{
+                        "Ref":"CommitlogVolumeSize"
+                     },
+                     "VolumeType":{
+                        "Ref":"CommitlogVolumeType"
+                     },
+                     "Iops":{
+                        "Fn::If":[
+                           "UseEBSPIOPScommitlog",
+                           {
+                              "Ref":"CommitlogVolumeIOPS"
+                           },
+                           {
+                              "Ref":"AWS::NoValue"
+                           }
+                        ]
+                     },
+                     "Encrypted":{
+                        "Fn::If":[
+                           "UseEncryption",
+                           "True",
+                           "False"
+                        ]
+                     },
+                     "KmsKeyId":{
+                        "Fn::If":[
+                           "UseKMSKey",
+                           {
+                              "Ref":"AWS::NoValue"
+                           },
+                           {
+                              "Ref":"KMSKeyId"
+                           }
+                        ]
+                     }
+                  }
+               }
+            ],
+            "KeyName":{
+               "Ref":"SSHKeyName"
+            },
+            "EbsOptimized":{
+               "Fn::FindInMap":[
+                  "AWSInstanceType2Capabilites",
+                  {
+                     "Ref":"InstanceType"
+                  },
+                  "EBSOpt"
+               ]
+            },
+            "ImageId":{
+               "Fn::FindInMap":[
+                  "AWSAmazonLinuxAMI",
+                  {
+                     "Ref":"AWS::Region"
+                  },
+                  "201503"
+               ]
+            },
+            "SecurityGroups":[
+               {
+                  "Ref":"CassandraSecurityGroup"
+               }
+            ],
+            "IamInstanceProfile":{
+               "Ref":"CassandraProfile"
+            },
+            "InstanceMonitoring":"false",
+            "UserData":{
+               "Fn::Base64":{
+                  "Fn::Join":[
+                     "",
+                     [
+                        "#! /bin/bash -v\n",
+                        "mkdir -p /home/ec2-user/cassandra \n",
+                        "cd /home/ec2-user/cassandra \n",
+                        "until ping -c 1 google.com \n",
+                        "do \n",
+                        "sleep 5; \n",
+                        "done \n",
+                        "aws ec2 attach-network-interface --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " --network-interface-id ",
+                        {
+                           "Ref":"FirstSeedENI"
+                        },
+                        " --instance-id `curl -s curl http://169.254.169.254/latest/meta-data/instance-id` --device-index 1\n",
+                        "echo \"",
+                        {
+                           "Ref":"ClusterName"
+                        },
+                        "\" > /tmp/clustername.data \n",
+                        "echo \"",
+                        {
+                           "Fn::Join":[
+                              ",",
+                              [
+                                 {
+                                    "Fn::GetAtt":[
+                                       "FirstSeedENI",
+                                       "PrimaryPrivateIpAddress"
+                                    ]
+                                 },
+                                 {
+                                    "Fn::If":[
+                                       "LaunchSecondSeed",
+                                       {
+                                          "Fn::GetAtt":[
+                                             "SecondSeedENI",
+                                             "PrimaryPrivateIpAddress"
+                                          ]
+                                       },
+                                       {
+                                          "Ref":"AWS::NoValue"
+                                       }
+                                    ]
+                                 },
+                                 {
+                                    "Fn::If":[
+                                       "LaunchThirdSeed",
+                                       {
+                                          "Fn::GetAtt":[
+                                             "ThirdSeedENI",
+                                             "PrimaryPrivateIpAddress"
+                                          ]
+                                       },
+                                       {
+                                          "Ref":"AWS::NoValue"
+                                       }
+                                    ]
+                                 }
+                              ]
+                           ]
+                        },
+                        "\" > /tmp/seeds.data \n",
+                        "echo \"",
+                        {
+                           "Fn::GetAtt":[
+                              "FirstSeedENI",
+                              "PrimaryPrivateIpAddress"
+                           ]
+                        },
+                        "\" > /tmp/eip.data \n",
+                        "aws ec2 describe-instances --instance-ids $(curl -s curl http://169.254.169.254/latest/meta-data/instance-id/) --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " > /tmp/describec2instance.data\n",
+                        "asgname=$(aws autoscaling describe-auto-scaling-instances --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " --instance-ids $(curl -s curl http://169.254.169.254/latest/meta-data/instance-id/)|grep AutoScalingGroupName|cut -d':' -f2|cut -d'\"' -f2) \n",
+                        "aws autoscaling describe-scaling-activities --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " --auto-scaling-group-name $asgname > /tmp/asgactivity.data\n",
+                        "aws s3 cp s3://",
+                        {
+                           "Ref": "BuildBucket"
+                        },
+                        "/scripts/setupHost.sh setupHost.sh\n",
+                        "chmod +x setupHost.sh \n",
+                        "./setupHost.sh > install.log 2>&1 \n",
+                        "# Helper function\n",
+                        "function error_exit\n",
+                        "{\n",
+                        "  /opt/aws/bin/cfn-signal -e 1 --reason=\"$1\" --stack ",
+                        {
+                           "Ref":"AWS::StackName"
+                        },
+                        " --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " --resource=SeedServer \n",
+                        "  exit 1\n",
+                        "}\n",
+                        "# Install packages\n",
+                        "/opt/aws/bin/cfn-init -s ",
+                        {
+                           "Ref":"AWS::StackId"
+                        },
+                        " -r CassandraSeedServerLaunchConfig ",
+                        "    --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        "\n",
+                        "# All is well so signal success\n",
+                        "  /opt/aws/bin/cfn-signal -e 0 --reason=\"SeedServer setup complete\" --stack ",
+                        {
+                           "Ref":"AWS::StackName"
+                        },
+                        " --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " --resource=SeedServer \n"
+                     ]
+                  ]
+               }
+            }
+         },
+         "Metadata":{
+            "AWS::CloudFormation::Init":{
+               "configSets":{
+                  "default":[
+                     "configure_hosts",
+                     {
+                        "Fn::If":[
+                           "Installjava7",
+                           "install_java7",
+                           "install_java8"
+                        ]
+                     },
+                     "install_repo",
+                     "install_jna",
+                     {
+                        "Fn::If":[
+                           "Installdsc20",
+                           "install_cassandra_20",
+                           "install_cassandra_21"
+                        ]
+                     },
+                     "install_dse_agents",
+                     "z_bounce_dse",
+                     "y_install_monit"
+                  ]
+               },
+               "configure_hosts":{
+                  "commands":{
+                     "01-create_hosts_entry-on_boot":{
+                        "command":"echo \"`curl -s curl http://169.254.169.254/latest/meta-data/local-ipv4` `hostname`\" >>/etc/hosts",
+                        "test":"test ! -f .create_hosts_entry-semaphore"
+                     },
+                     "02-signal_startup_complete":{
+                        "command":"touch .create_hosts_entry-semaphore"
+                     }
+                  }
+               },
+               "configure_eni":{
+                  "commands":{
+                     "01-attach_eni":{
+                        "command":"echo \"`curl -s curl http://169.254.169.254/latest/meta-data/local-ipv4` `hostname`\" >>/etc/hosts",
+                        "test":"test ! -f .create_hosts_entry-semaphore"
+                     },
+                     "02-signal_startup_complete":{
+                        "command":"touch .create_hosts_entry-semaphore"
+                     }
+                  }
+               },
+               "install_java7":{
+                  "packages":{
+                     "yum":{
+                        "java-1.7.0-openjdk-devel":[
+
+                        ]
+                     }
+                  },
+                  "commands":{
+                     "use_java7":{
+                        "command":"alternatives --set java /usr/lib/jvm/jre-1.7.0-openjdk.x86_64/bin/java"
+                     }
+                  }
+               },
+               "install_java8":{
+                  "packages":{
+                     "yum":{
+                        "java-1.8.0-openjdk-devel":[
+
+                        ]
+                     }
+                  },
+                  "commands":{
+                     "use_java8":{
+                        "command":"alternatives --set java /usr/lib/jvm/jre-1.8.0-openjdk.x86_64/bin/java"
+                     }
+                  }
+               },
+               "install_jna":{
+                  "packages":{
+                     "yum":{
+                        "jna":[
+
+                        ]
+                     }
+                  }
+               },
+               "install_dse_agents":{
+                  "packages":{
+                     "yum":{
+                        "datastax-agent":[
+
+                        ]
+                     }
+                  },
+                  "files":{
+                     "/var/lib/datastax-agent/conf/address.yaml":{
+                        "content":{
+                           "Fn::Join":[
+                              "",
+                              [
+                                 "stomp_interface: ",
+                                 {
+                                    "Fn::GetAtt":[
+                                       "OpsCenterENI",
+                                       "PrimaryPrivateIpAddress"
+                                    ]
+                                 },
+                                 "\n"
+                              ]
+                           ]
+                        }
+                     }
+                  },
+                  "services":{
+                     "sysvinit":{
+                        "datastax-agent":{
+                           "enabled":"true",
+                           "ensureRunning":"true"
+                        }
+                     }
+                  }
+               },
+               "install_repo":{
+                  "files":{
+                     "/etc/yum.repos.d/datastax.repo":{
+                        "content":{
+                           "Fn::Join":[
+                              "\n",
+                              [
+                                 "[datastax]",
+                                 "name = DataStax Repo for Apache Cassandra",
+                                 "baseurl = http://rpm.datastax.com/community",
+                                 "enabled = 1",
+                                 "gpgcheck = 0"
+                              ]
+                           ]
+                        },
+                        "mode":"000644",
+                        "owner":"root",
+                        "group":"root"
+                     }
+                  }
+               },
+               "install_cassandra_20":{
+                  "packages":{
+                     "yum":{
+                        "dsc20":[
+
+                        ]
+                     }
+                  },
+                  "commands":{
+                     "set_listen_address":{
+                        "command":"sed -i -e \"s/listen_address:.*/listen_address: \\\"$(cat /tmp/eip.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_rpc_address":{
+                        "command":"sed -i -e \"s/rpc_address:.*/rpc_address: \\\"$(cat /tmp/eip.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_seed_address":{
+                        "command":"sed -i -e \"s/seeds:.*/seeds: \\\"$(cat /tmp/seeds.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_data_directory":{
+                        "command":"printf \"data_file_directories: \n          - /data\" | tee -a /etc/cassandra/default.conf/cassandra.yaml > /dev/null"
+                     },
+                     "set_commitlog_directory":{
+                        "command":"echo \"commitlog_directory: /commitlog\" | tee -a /etc/cassandra/default.conf/cassandra.yaml > /dev/null"
+                     },
+                     "set_cluster_name":{
+                        "command":"sed -i -e \"s/cluster_name:.*/cluster_name: \\\"$(cat /tmp/clustername.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "01_remove_data_dir":{
+                        "command":"sed -i -e \"/data_file_directories:/ { N; d; }\" /etc/cassandra/default.conf/cassandra.yaml"
+                     },
+                     "02_remove_commit_dir":{
+                        "command":"sed -i -e \"/commitlog_directory:/ { N; d; }\" /etc/cassandra/default.conf/cassandra.yaml"
+                     },
+                     "set_snitch":{
+                        "command":"sed -i -e \"s/endpoint_snitch:.*/endpoint_snitch: Ec2Snitch/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     }
+                  },
+                  "services":{
+                     "sysvinit":{
+                        "cassandra":{
+                           "enabled":"true",
+                           "ensureRunning":"true"
+                        }
+                     }
+                  }
+               },
+               "install_cassandra_21":{
+                  "packages":{
+                     "yum":{
+                        "dsc21":[
+
+                        ]
+                     }
+                  },
+                  "commands":{
+                     "set_listen_address":{
+                        "command":"sed -i -e \"s/listen_address:.*/listen_address: \\\"$(cat /tmp/eip.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_rpc_address":{
+                        "command":"sed -i -e \"s/rpc_address:.*/rpc_address: \\\"$(cat /tmp/eip.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_seed_address":{
+                        "command":"sed -i -e \"s/seeds:.*/seeds: \\\"$(cat /tmp/seeds.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_data_directory":{
+                        "command":"printf \"data_file_directories: \n          - /data\" | tee -a /etc/cassandra/default.conf/cassandra.yaml > /dev/null"
+                     },
+                     "set_commitlog_directory":{
+                        "command":"echo \"commitlog_directory: /commitlog\" | tee -a /etc/cassandra/default.conf/cassandra.yaml > /dev/null"
+                     },
+                     "set_cluster_name":{
+                        "command":"sed -i -e \"s/cluster_name:.*/cluster_name: \\\"$(cat /tmp/clustername.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "01_remove_data_dir":{
+                        "command":"sed -i -e \"/data_file_directories:/ { N; d; }\" /etc/cassandra/default.conf/cassandra.yaml"
+                     },
+                     "02_remove_commit_dir":{
+                        "command":"sed -i -e \"/commitlog_directory:/ { N; d; }\" /etc/cassandra/default.conf/cassandra.yaml"
+                     },
+                     "set_snitch":{
+                        "command":"sed -i -e \"s/endpoint_snitch:.*/endpoint_snitch: Ec2Snitch/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     }
+                  },
+                  "services":{
+                     "sysvinit":{
+                        "cassandra":{
+                           "enabled":"true",
+                           "ensureRunning":"true"
+                        }
+                     }
+                  }
+               },
+               "z_bounce_dse":{
+                  "commands":{
+                     "kill_dse":{
+                        "command":"service datastax-agent stop"
+                     }
+                  }
+               },
+               "y_install_monit":{
+                  "packages":{
+                     "yum":{
+                        "monit":[
+
+                        ]
+                     }
+                  },
+                  "files":{
+                     "/etc/monit.d/cassandramonit":{
+                        "content":{
+                           "Fn::Join":[
+                              "",
+                              [
+                                 "set daemon 60 with start delay 60 \n",
+                                 "check cassandra matching \"cassandra\" \n",
+                                 "    start program = \"/etc/init.d/cassandra start\" \n",
+                                 "    stop program = \"/etc/init.d/cassandra stop\" \n"
+                              ]
+                           ]
+                        }
+                     },
+                     "/etc/monit.d/dseagentmonit":{
+                        "content":{
+                           "Fn::Join":[
+                              "",
+                              [
+                                 "set daemon 180 with start delay 60 \n",
+                                 "check datastax-agent matching \"datastax-agent\" \n",
+                                 "    start program = \"/etc/init.d/datastax-agent start\" \n",
+                                 "    stop program = \"/etc/init.d/datastax-agent stop\" \n",
+                                 "    depends on agent.log \n",
+                                 "                         \n",
+                                 "check file agent.log with path /var/log/datastax-agent/agent.log \n",
+                                 "        if match \"ERROR\" then restart \n"
+                              ]
+                           ]
+                        }
+                     }
+                  },
+                  "services":{
+                     "sysvinit":{
+                        "monit":{
+                           "enabled":"true",
+                           "ensureRunning":"true"
+                        }
+                     }
+                  }
+               }
+            }
+         }
+      },
+      "SecondSeedServer":{
+         "Type":"AWS::AutoScaling::AutoScalingGroup",
+         "Condition":"LaunchSecondSeed",
+         "DependsOn":[
+            "SecondSeedENI",
+            "opscenterEIP"
+         ],
+         "UpdatePolicy":{
+            "AutoScalingRollingUpdate":{
+               "MaxBatchSize":"1",
+               "MinInstancesInService":"1",
+               "PauseTime":"PT2M30S"
+            }
+         },
+         "Properties":{
+            "VPCZoneIdentifier":[
+               {
+                  "Ref":"SecondSubnetId"
+               }
+            ],
+            "LaunchConfigurationName":{
+               "Ref":"SecondSeedServerLaunchConfig"
+            },
+            "MinSize":"1",
+            "MaxSize":"1",
+            "DesiredCapacity":"1",
+            "Tags":[
+               {
+                  "Key":"Name",
+                  "Value":"Cassandra-SecondSeedServer",
+                  "PropagateAtLaunch":"true"
+               }
+            ]
+         },
+         "CreationPolicy":{
+            "ResourceSignal":{
+               "Timeout":"PT30M",
+               "Count":"1"
+            }
+         }
+      },
+      "SecondSeedServerLaunchConfig":{
+         "Type":"AWS::AutoScaling::LaunchConfiguration",
+         "DependsOn":[
+            "CassandraSecurityGroup",
+            "CassandraProfile",
+            "SecondSeedENI",
+            "opscenterEIP"
+         ],
+         "Condition":"LaunchSecondSeed",
+         "Properties":{
+            "InstanceType":{
+               "Ref":"InstanceType"
+            },
+            "BlockDeviceMappings":[
+               {
+                  "DeviceName":"/dev/xvdba",
+                  "Ebs":{
+                     "VolumeSize":{
+                        "Ref":"DataVolumeSize"
+                     },
+                     "VolumeType":{
+                        "Ref":"DataVolumeType"
+                     },
+                     "Iops":{
+                        "Fn::If":[
+                           "UseEBSPIOPSdata",
+                           {
+                              "Ref":"DataVolumeIOPS"
+                           },
+                           {
+                              "Ref":"AWS::NoValue"
+                           }
+                        ]
+                     },
+                     "Encrypted":{
+                        "Fn::If":[
+                           "UseEncryption",
+                           "True",
+                           "False"
+                        ]
+                     },
+                     "KmsKeyId":{
+                        "Fn::If":[
+                           "UseKMSKey",
+                           {
+                              "Ref":"AWS::NoValue"
+                           },
+                           {
+                              "Ref":"KMSKeyId"
+                           }
+                        ]
+                     }
+                  }
+               },
+               {
+                  "DeviceName":"/dev/xvdbb",
+                  "Ebs":{
+                     "VolumeSize":{
+                        "Ref":"CommitlogVolumeSize"
+                     },
+                     "VolumeType":{
+                        "Ref":"CommitlogVolumeType"
+                     },
+                     "Iops":{
+                        "Fn::If":[
+                           "UseEBSPIOPScommitlog",
+                           {
+                              "Ref":"CommitlogVolumeIOPS"
+                           },
+                           {
+                              "Ref":"AWS::NoValue"
+                           }
+                        ]
+                     },
+                     "Encrypted":{
+                        "Fn::If":[
+                           "UseEncryption",
+                           "True",
+                           "False"
+                        ]
+                     },
+                     "KmsKeyId":{
+                        "Fn::If":[
+                           "UseKMSKey",
+                           {
+                              "Ref":"AWS::NoValue"
+                           },
+                           {
+                              "Ref":"KMSKeyId"
+                           }
+                        ]
+                     }
+                  }
+               }
+            ],
+            "KeyName":{
+               "Ref":"SSHKeyName"
+            },
+            "EbsOptimized":{
+               "Fn::FindInMap":[
+                  "AWSInstanceType2Capabilites",
+                  {
+                     "Ref":"InstanceType"
+                  },
+                  "EBSOpt"
+               ]
+            },
+            "ImageId":{
+               "Fn::FindInMap":[
+                  "AWSAmazonLinuxAMI",
+                  {
+                     "Ref":"AWS::Region"
+                  },
+                  "201503"
+               ]
+            },
+            "SecurityGroups":[
+               {
+                  "Ref":"CassandraSecurityGroup"
+               }
+            ],
+            "IamInstanceProfile":{
+               "Ref":"CassandraProfile"
+            },
+            "InstanceMonitoring":"false",
+            "UserData":{
+               "Fn::Base64":{
+                  "Fn::Join":[
+                     "",
+                     [
+                        "#! /bin/bash -v\n",
+                        "mkdir -p /home/ec2-user/cassandra \n",
+                        "cd /home/ec2-user/cassandra \n",
+                        "until ping -c 1 google.com \n",
+                        "do \n",
+                        "sleep 5; \n",
+                        "done \n",
+                        "aws ec2 attach-network-interface --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " --network-interface-id ",
+                        {
+                           "Fn::If":[
+                              "LaunchSecondSeed",
+                              {
+                                 "Ref":"SecondSeedENI"
+                              },
+                              {
+                                 "Ref":"AWS::NoValue"
+                              }
+                           ]
+                        },
+                        " --instance-id `curl -s curl http://169.254.169.254/latest/meta-data/instance-id` --device-index 1\n",
+                        "echo \"",
+                        {
+                           "Ref":"ClusterName"
+                        },
+                        "\" > /tmp/clustername.data \n",
+                        "echo \"",
+                        {
+                           "Fn::Join":[
+                              ",",
+                              [
+                                 {
+                                    "Fn::GetAtt":[
+                                       "FirstSeedENI",
+                                       "PrimaryPrivateIpAddress"
+                                    ]
+                                 },
+                                 {
+                                    "Fn::If":[
+                                       "LaunchSecondSeed",
+                                       {
+                                          "Fn::GetAtt":[
+                                             "SecondSeedENI",
+                                             "PrimaryPrivateIpAddress"
+                                          ]
+                                       },
+                                       {
+                                          "Ref":"AWS::NoValue"
+                                       }
+                                    ]
+                                 },
+                                 {
+                                    "Fn::If":[
+                                       "LaunchThirdSeed",
+                                       {
+                                          "Fn::GetAtt":[
+                                             "ThirdSeedENI",
+                                             "PrimaryPrivateIpAddress"
+                                          ]
+                                       },
+                                       {
+                                          "Ref":"AWS::NoValue"
+                                       }
+                                    ]
+                                 }
+                              ]
+                           ]
+                        },
+                        "\" > /tmp/seeds.data \n",
+                        "echo \"",
+                        {
+                           "Fn::GetAtt":[
+                              "SecondSeedENI",
+                              "PrimaryPrivateIpAddress"
+                           ]
+                        },
+                        "\" > /tmp/eip.data \n",
+                        "aws ec2 describe-instances --instance-ids $(curl -s curl http://169.254.169.254/latest/meta-data/instance-id/) --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " > /tmp/describec2instance.data\n",
+                        "asgname=$(aws autoscaling describe-auto-scaling-instances --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " --instance-ids $(curl -s curl http://169.254.169.254/latest/meta-data/instance-id/)|grep AutoScalingGroupName|cut -d':' -f2|cut -d'\"' -f2) \n",
+                        "aws autoscaling describe-scaling-activities --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " --auto-scaling-group-name $asgname > /tmp/asgactivity.data\n",
+                        "aws s3 cp s3://",
+                        {
+                           "Ref": "BuildBucket"
+                        },
+                        "/scripts/setupHost.sh setupHost.sh\n",
+                        "chmod +x setupHost.sh \n",
+                        "./setupHost.sh > install.log 2>&1 \n",
+                        "# Helper function\n",
+                        "function error_exit\n",
+                        "{\n",
+                        "  /opt/aws/bin/cfn-signal -e 1 --reason=\"$1\" --stack ",
+                        {
+                           "Ref":"AWS::StackName"
+                        },
+                        " --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " --resource=SecondSeedServer \n",
+                        "  exit 1\n",
+                        "}\n",
+                        "# Install packages\n",
+                        "/opt/aws/bin/cfn-init -s ",
+                        {
+                           "Ref":"AWS::StackId"
+                        },
+                        " -r SecondSeedServerLaunchConfig ",
+                        "    --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        "\n",
+                        "# All is well so signal success\n",
+                        "  /opt/aws/bin/cfn-signal -e 0 --reason=\"SeedServer setup complete\" --stack ",
+                        {
+                           "Ref":"AWS::StackName"
+                        },
+                        " --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " --resource=SecondSeedServer \n"
+                     ]
+                  ]
+               }
+            }
+         },
+         "Metadata":{
+            "AWS::CloudFormation::Init":{
+               "configSets":{
+                  "default":[
+                     "configure_hosts",
+                     {
+                        "Fn::If":[
+                           "Installjava7",
+                           "install_java7",
+                           "install_java8"
+                        ]
+                     },
+                     "install_repo",
+                     "install_jna",
+                     {
+                        "Fn::If":[
+                           "Installdsc20",
+                           "install_cassandra_20",
+                           "install_cassandra_21"
+                        ]
+                     },
+                     "install_dse_agents",
+                     "z_bounce_dse",
+                     "y_install_monit"
+                  ]
+               },
+               "configure_hosts":{
+                  "commands":{
+                     "01-create_hosts_entry-on_boot":{
+                        "command":"echo \"`curl -s curl http://169.254.169.254/latest/meta-data/local-ipv4` `hostname`\" >>/etc/hosts",
+                        "test":"test ! -f .create_hosts_entry-semaphore"
+                     },
+                     "02-signal_startup_complete":{
+                        "command":"touch .create_hosts_entry-semaphore"
+                     }
+                  }
+               },
+               "configure_eni":{
+                  "commands":{
+                     "01-attach_eni":{
+                        "command":"echo \"`curl -s curl http://169.254.169.254/latest/meta-data/local-ipv4` `hostname`\" >>/etc/hosts",
+                        "test":"test ! -f .create_hosts_entry-semaphore"
+                     },
+                     "02-signal_startup_complete":{
+                        "command":"touch .create_hosts_entry-semaphore"
+                     }
+                  }
+               },
+               "install_java7":{
+                  "packages":{
+                     "yum":{
+                        "java-1.7.0-openjdk-devel":[
+
+                        ]
+                     }
+                  },
+                  "commands":{
+                     "use_java7":{
+                        "command":"alternatives --set java /usr/lib/jvm/jre-1.7.0-openjdk.x86_64/bin/java"
+                     }
+                  }
+               },
+               "install_java8":{
+                  "packages":{
+                     "yum":{
+                        "java-1.8.0-openjdk-devel":[
+
+                        ]
+                     }
+                  },
+                  "commands":{
+                     "use_java8":{
+                        "command":"alternatives --set java /usr/lib/jvm/jre-1.8.0-openjdk.x86_64/bin/java"
+                     }
+                  }
+               },
+               "install_jna":{
+                  "packages":{
+                     "yum":{
+                        "jna":[
+
+                        ]
+                     }
+                  }
+               },
+               "install_dse_agents":{
+                  "packages":{
+                     "yum":{
+                        "datastax-agent":[
+
+                        ]
+                     }
+                  },
+                  "files":{
+                     "/var/lib/datastax-agent/conf/address.yaml":{
+                        "content":{
+                           "Fn::Join":[
+                              "",
+                              [
+                                 "stomp_interface: ",
+                                 {
+                                    "Fn::GetAtt":[
+                                       "OpsCenterENI",
+                                       "PrimaryPrivateIpAddress"
+                                    ]
+                                 },
+                                 "\n"
+                              ]
+                           ]
+                        }
+                     }
+                  },
+                  "services":{
+                     "sysvinit":{
+                        "datastax-agent":{
+                           "enabled":"true",
+                           "ensureRunning":"true"
+                        }
+                     }
+                  }
+               },
+               "install_repo":{
+                  "files":{
+                     "/etc/yum.repos.d/datastax.repo":{
+                        "content":{
+                           "Fn::Join":[
+                              "\n",
+                              [
+                                 "[datastax]",
+                                 "name = DataStax Repo for Apache Cassandra",
+                                 "baseurl = http://rpm.datastax.com/community",
+                                 "enabled = 1",
+                                 "gpgcheck = 0"
+                              ]
+                           ]
+                        },
+                        "mode":"000644",
+                        "owner":"root",
+                        "group":"root"
+                     }
+                  }
+               },
+               "install_cassandra_20":{
+                  "packages":{
+                     "yum":{
+                        "dsc20":[
+
+                        ]
+                     }
+                  },
+                  "commands":{
+                     "set_listen_address":{
+                        "command":"sed -i -e \"s/listen_address:.*/listen_address: \\\"$(cat /tmp/eip.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_rpc_address":{
+                        "command":"sed -i -e \"s/rpc_address:.*/rpc_address: \\\"$(cat /tmp/eip.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_seed_address":{
+                        "command":"sed -i -e \"s/seeds:.*/seeds: \\\"$(cat /tmp/seeds.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_data_directory":{
+                        "command":"printf \"data_file_directories: \n          - /data\" | tee -a /etc/cassandra/default.conf/cassandra.yaml > /dev/null"
+                     },
+                     "set_commitlog_directory":{
+                        "command":"echo \"commitlog_directory: /commitlog\" | tee -a /etc/cassandra/default.conf/cassandra.yaml > /dev/null"
+                     },
+                     "set_cluster_name":{
+                        "command":"sed -i -e \"s/cluster_name:.*/cluster_name: \\\"$(cat /tmp/clustername.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "01_remove_data_dir":{
+                        "command":"sed -i -e \"/data_file_directories:/ { N; d; }\" /etc/cassandra/default.conf/cassandra.yaml"
+                     },
+                     "02_remove_commit_dir":{
+                        "command":"sed -i -e \"/commitlog_directory:/ { N; d; }\" /etc/cassandra/default.conf/cassandra.yaml"
+                     },
+                     "set_snitch":{
+                        "command":"sed -i -e \"s/endpoint_snitch:.*/endpoint_snitch: Ec2Snitch/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     }
+                  },
+                  "services":{
+                     "sysvinit":{
+                        "cassandra":{
+                           "enabled":"true",
+                           "ensureRunning":"true"
+                        }
+                     }
+                  }
+               },
+               "install_cassandra_21":{
+                  "packages":{
+                     "yum":{
+                        "dsc21":[
+
+                        ]
+                     }
+                  },
+                  "commands":{
+                     "set_listen_address":{
+                        "command":"sed -i -e \"s/listen_address:.*/listen_address: \\\"$(cat /tmp/eip.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_rpc_address":{
+                        "command":"sed -i -e \"s/rpc_address:.*/rpc_address: \\\"$(cat /tmp/eip.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_seed_address":{
+                        "command":"sed -i -e \"s/seeds:.*/seeds: \\\"$(cat /tmp/seeds.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_data_directory":{
+                        "command":"printf \"data_file_directories: \n          - /data\" | tee -a /etc/cassandra/default.conf/cassandra.yaml > /dev/null"
+                     },
+                     "set_commitlog_directory":{
+                        "command":"echo \"commitlog_directory: /commitlog\" | tee -a /etc/cassandra/default.conf/cassandra.yaml > /dev/null"
+                     },
+                     "set_cluster_name":{
+                        "command":"sed -i -e \"s/cluster_name:.*/cluster_name: \\\"$(cat /tmp/clustername.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "01_remove_data_dir":{
+                        "command":"sed -i -e \"/data_file_directories:/ { N; d; }\" /etc/cassandra/default.conf/cassandra.yaml"
+                     },
+                     "02_remove_commit_dir":{
+                        "command":"sed -i -e \"/commitlog_directory:/ { N; d; }\" /etc/cassandra/default.conf/cassandra.yaml"
+                     },
+                     "set_snitch":{
+                        "command":"sed -i -e \"s/endpoint_snitch:.*/endpoint_snitch: Ec2Snitch/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     }
+                  },
+                  "services":{
+                     "sysvinit":{
+                        "cassandra":{
+                           "enabled":"true",
+                           "ensureRunning":"true"
+                        }
+                     }
+                  }
+               },
+               "z_bounce_dse":{
+                  "commands":{
+                     "kill_dse":{
+                        "command":"service datastax-agent stop"
+                     }
+                  }
+               },
+               "y_install_monit":{
+                  "packages":{
+                     "yum":{
+                        "monit":[
+
+                        ]
+                     }
+                  },
+                  "files":{
+                     "/etc/monit.d/cassandramonit":{
+                        "content":{
+                           "Fn::Join":[
+                              "",
+                              [
+                                 "set daemon 60 with start delay 60 \n",
+                                 "check cassandra matching \"cassandra\" \n",
+                                 "    start program = \"/etc/init.d/cassandra start\" \n",
+                                 "    stop program = \"/etc/init.d/cassandra stop\" \n"
+                              ]
+                           ]
+                        }
+                     },
+                     "/etc/monit.d/dseagentmonit":{
+                        "content":{
+                           "Fn::Join":[
+                              "",
+                              [
+                                 "set daemon 180 with start delay 60 \n",
+                                 "check datastax-agent matching \"datastax-agent\" \n",
+                                 "    start program = \"/etc/init.d/datastax-agent start\" \n",
+                                 "    stop program = \"/etc/init.d/datastax-agent stop\" \n",
+                                 "    depends on agent.log \n",
+                                 "                         \n",
+                                 "check file agent.log with path /var/log/datastax-agent/agent.log \n",
+                                 "        if match \"ERROR\" then restart \n"
+                              ]
+                           ]
+                        }
+                     }
+                  },
+                  "services":{
+                     "sysvinit":{
+                        "monit":{
+                           "enabled":"true",
+                           "ensureRunning":"true"
+                        }
+                     }
+                  }
+               }
+            }
+         }
+      },
+      "ThirdSeedServer":{
+         "Type":"AWS::AutoScaling::AutoScalingGroup",
+         "Condition":"LaunchThirdSeed",
+         "DependsOn":[
+            "ThirdSeedENI",
+            "opscenterEIP"
+         ],
+         "UpdatePolicy":{
+            "AutoScalingRollingUpdate":{
+               "MaxBatchSize":"1",
+               "MinInstancesInService":"1",
+               "PauseTime":"PT2M30S"
+            }
+         },
+         "Properties":{
+            "VPCZoneIdentifier":[
+               {
+                  "Ref":"ThirdSubnetId"
+               }
+            ],
+            "LaunchConfigurationName":{
+               "Ref":"ThirdSeedServerLaunchConfig"
+            },
+            "MinSize":"1",
+            "MaxSize":"1",
+            "DesiredCapacity":"1",
+            "Tags":[
+               {
+                  "Key":"Name",
+                  "Value":"Cassandra-ThirdSeedServer",
+                  "PropagateAtLaunch":"true"
+               }
+            ]
+         },
+         "CreationPolicy":{
+            "ResourceSignal":{
+               "Timeout":"PT30M",
+               "Count":"1"
+            }
+         }
+      },
+      "ThirdSeedServerLaunchConfig":{
+         "Type":"AWS::AutoScaling::LaunchConfiguration",
+         "DependsOn":[
+            "CassandraSecurityGroup",
+            "CassandraProfile",
+            "ThirdSeedENI",
+            "opscenterEIP"
+         ],
+         "Condition":"LaunchThirdSeed",
+         "Properties":{
+            "InstanceType":{
+               "Ref":"InstanceType"
+            },
+            "BlockDeviceMappings":[
+               {
+                  "DeviceName":"/dev/xvdba",
+                  "Ebs":{
+                     "VolumeSize":{
+                        "Ref":"DataVolumeSize"
+                     },
+                     "VolumeType":{
+                        "Ref":"DataVolumeType"
+                     },
+                     "Iops":{
+                        "Fn::If":[
+                           "UseEBSPIOPSdata",
+                           {
+                              "Ref":"DataVolumeIOPS"
+                           },
+                           {
+                              "Ref":"AWS::NoValue"
+                           }
+                        ]
+                     },
+                     "Encrypted":{
+                        "Fn::If":[
+                           "UseEncryption",
+                           "True",
+                           "False"
+                        ]
+                     },
+                     "KmsKeyId":{
+                        "Fn::If":[
+                           "UseKMSKey",
+                           {
+                              "Ref":"AWS::NoValue"
+                           },
+                           {
+                              "Ref":"KMSKeyId"
+                           }
+                        ]
+                     }
+                  }
+               },
+               {
+                  "DeviceName":"/dev/xvdbb",
+                  "Ebs":{
+                     "VolumeSize":{
+                        "Ref":"CommitlogVolumeSize"
+                     },
+                     "VolumeType":{
+                        "Ref":"CommitlogVolumeType"
+                     },
+                     "Iops":{
+                        "Fn::If":[
+                           "UseEBSPIOPScommitlog",
+                           {
+                              "Ref":"CommitlogVolumeIOPS"
+                           },
+                           {
+                              "Ref":"AWS::NoValue"
+                           }
+                        ]
+                     },
+                     "Encrypted":{
+                        "Fn::If":[
+                           "UseEncryption",
+                           "True",
+                           "False"
+                        ]
+                     },
+                     "KmsKeyId":{
+                        "Fn::If":[
+                           "UseKMSKey",
+                           {
+                              "Ref":"AWS::NoValue"
+                           },
+                           {
+                              "Ref":"KMSKeyId"
+                           }
+                        ]
+                     }
+                  }
+               }
+            ],
+            "KeyName":{
+               "Ref":"SSHKeyName"
+            },
+            "EbsOptimized":{
+               "Fn::FindInMap":[
+                  "AWSInstanceType2Capabilites",
+                  {
+                     "Ref":"InstanceType"
+                  },
+                  "EBSOpt"
+               ]
+            },
+            "ImageId":{
+               "Fn::FindInMap":[
+                  "AWSAmazonLinuxAMI",
+                  {
+                     "Ref":"AWS::Region"
+                  },
+                  "201503"
+               ]
+            },
+            "SecurityGroups":[
+               {
+                  "Ref":"CassandraSecurityGroup"
+               }
+            ],
+            "IamInstanceProfile":{
+               "Ref":"CassandraProfile"
+            },
+            "InstanceMonitoring":"false",
+            "UserData":{
+               "Fn::Base64":{
+                  "Fn::Join":[
+                     "",
+                     [
+                        "#! /bin/bash -v\n",
+                        "mkdir -p /home/ec2-user/cassandra \n",
+                        "cd /home/ec2-user/cassandra \n",
+                        "until ping -c 1 google.com \n",
+                        "do \n",
+                        "sleep 5; \n",
+                        "done \n",
+                        "aws ec2 attach-network-interface --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " --network-interface-id ",
+                        {
+                           "Fn::If":[
+                              "LaunchThirdSeed",
+                              {
+                                 "Ref":"ThirdSeedENI"
+                              },
+                              {
+                                 "Ref":"AWS::NoValue"
+                              }
+                           ]
+                        },
+                        " --instance-id `curl -s curl http://169.254.169.254/latest/meta-data/instance-id` --device-index 1\n",
+                        "echo \"",
+                        {
+                           "Ref":"ClusterName"
+                        },
+                        "\" > /tmp/clustername.data \n",
+                        "echo \"",
+                        {
+                           "Fn::Join":[
+                              ",",
+                              [
+                                 {
+                                    "Fn::GetAtt":[
+                                       "FirstSeedENI",
+                                       "PrimaryPrivateIpAddress"
+                                    ]
+                                 },
+                                 {
+                                    "Fn::If":[
+                                       "LaunchSecondSeed",
+                                       {
+                                          "Fn::GetAtt":[
+                                             "SecondSeedENI",
+                                             "PrimaryPrivateIpAddress"
+                                          ]
+                                       },
+                                       {
+                                          "Ref":"AWS::NoValue"
+                                       }
+                                    ]
+                                 },
+                                 {
+                                    "Fn::If":[
+                                       "LaunchThirdSeed",
+                                       {
+                                          "Fn::GetAtt":[
+                                             "ThirdSeedENI",
+                                             "PrimaryPrivateIpAddress"
+                                          ]
+                                       },
+                                       {
+                                          "Ref":"AWS::NoValue"
+                                       }
+                                    ]
+                                 }
+                              ]
+                           ]
+                        },
+                        "\" > /tmp/seeds.data \n",
+                        "echo \"",
+                        {
+                           "Fn::GetAtt":[
+                              "ThirdSeedENI",
+                              "PrimaryPrivateIpAddress"
+                           ]
+                        },
+                        "\" > /tmp/eip.data \n",
+                        "aws ec2 describe-instances --instance-ids $(curl -s curl http://169.254.169.254/latest/meta-data/instance-id/) --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " > /tmp/describec2instance.data\n",
+                        "asgname=$(aws autoscaling describe-auto-scaling-instances --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " --instance-ids $(curl -s curl http://169.254.169.254/latest/meta-data/instance-id/)|grep AutoScalingGroupName|cut -d':' -f2|cut -d'\"' -f2) \n",
+                        "aws autoscaling describe-scaling-activities --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " --auto-scaling-group-name $asgname > /tmp/asgactivity.data\n",
+                        "aws s3 cp s3://",
+                        {
+                           "Ref": "BuildBucket"
+                        },
+                        "/scripts/setupHost.sh setupHost.sh\n",
+                        "chmod +x setupHost.sh \n",
+                        "./setupHost.sh > install.log 2>&1 \n",
+                        "# Helper function\n",
+                        "function error_exit\n",
+                        "{\n",
+                        "  /opt/aws/bin/cfn-signal -e 1 --reason=\"$1\" --stack ",
+                        {
+                           "Ref":"AWS::StackName"
+                        },
+                        " --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " --resource=ThirdSeedServer \n",
+                        "  exit 1\n",
+                        "}\n",
+                        "# Install packages\n",
+                        "/opt/aws/bin/cfn-init -s ",
+                        {
+                           "Ref":"AWS::StackId"
+                        },
+                        " -r ThirdSeedServerLaunchConfig ",
+                        "    --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        "\n",
+                        "# All is well so signal success\n",
+                        "  /opt/aws/bin/cfn-signal -e 0 --reason=\"SeedServer setup complete\" --stack ",
+                        {
+                           "Ref":"AWS::StackName"
+                        },
+                        " --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " --resource=ThirdSeedServer \n"
+                     ]
+                  ]
+               }
+            }
+         },
+         "Metadata":{
+            "AWS::CloudFormation::Init":{
+               "configSets":{
+                  "default":[
+                     "configure_hosts",
+                     {
+                        "Fn::If":[
+                           "Installjava7",
+                           "install_java7",
+                           "install_java8"
+                        ]
+                     },
+                     "install_repo",
+                     "install_jna",
+                     {
+                        "Fn::If":[
+                           "Installdsc20",
+                           "install_cassandra_20",
+                           "install_cassandra_21"
+                        ]
+                     },
+                     "install_dse_agents",
+                     "z_bounce_dse",
+                     "y_install_monit"
+                  ]
+               },
+               "configure_hosts":{
+                  "commands":{
+                     "01-create_hosts_entry-on_boot":{
+                        "command":"echo \"`curl -s curl http://169.254.169.254/latest/meta-data/local-ipv4` `hostname`\" >>/etc/hosts",
+                        "test":"test ! -f .create_hosts_entry-semaphore"
+                     },
+                     "02-signal_startup_complete":{
+                        "command":"touch .create_hosts_entry-semaphore"
+                     }
+                  }
+               },
+               "configure_eni":{
+                  "commands":{
+                     "01-attach_eni":{
+                        "command":"echo \"`curl -s curl http://169.254.169.254/latest/meta-data/local-ipv4` `hostname`\" >>/etc/hosts",
+                        "test":"test ! -f .create_hosts_entry-semaphore"
+                     },
+                     "02-signal_startup_complete":{
+                        "command":"touch .create_hosts_entry-semaphore"
+                     }
+                  }
+               },
+               "install_java7":{
+                  "packages":{
+                     "yum":{
+                        "java-1.7.0-openjdk-devel":[
+
+                        ]
+                     }
+                  },
+                  "commands":{
+                     "use_java7":{
+                        "command":"alternatives --set java /usr/lib/jvm/jre-1.7.0-openjdk.x86_64/bin/java"
+                     }
+                  }
+               },
+               "install_java8":{
+                  "packages":{
+                     "yum":{
+                        "java-1.8.0-openjdk-devel":[
+
+                        ]
+                     }
+                  },
+                  "commands":{
+                     "use_java8":{
+                        "command":"alternatives --set java /usr/lib/jvm/jre-1.8.0-openjdk.x86_64/bin/java"
+                     }
+                  }
+               },
+               "install_jna":{
+                  "packages":{
+                     "yum":{
+                        "jna":[
+
+                        ]
+                     }
+                  }
+               },
+               "install_dse_agents":{
+                  "packages":{
+                     "yum":{
+                        "datastax-agent":[
+
+                        ]
+                     }
+                  },
+                  "files":{
+                     "/var/lib/datastax-agent/conf/address.yaml":{
+                        "content":{
+                           "Fn::Join":[
+                              "",
+                              [
+                                 "stomp_interface: ",
+                                 {
+                                    "Fn::GetAtt":[
+                                       "OpsCenterENI",
+                                       "PrimaryPrivateIpAddress"
+                                    ]
+                                 },
+                                 "\n"
+                              ]
+                           ]
+                        }
+                     }
+                  },
+                  "services":{
+                     "sysvinit":{
+                        "datastax-agent":{
+                           "enabled":"true",
+                           "ensureRunning":"true"
+                        }
+                     }
+                  }
+               },
+               "install_repo":{
+                  "files":{
+                     "/etc/yum.repos.d/datastax.repo":{
+                        "content":{
+                           "Fn::Join":[
+                              "\n",
+                              [
+                                 "[datastax]",
+                                 "name = DataStax Repo for Apache Cassandra",
+                                 "baseurl = http://rpm.datastax.com/community",
+                                 "enabled = 1",
+                                 "gpgcheck = 0"
+                              ]
+                           ]
+                        },
+                        "mode":"000644",
+                        "owner":"root",
+                        "group":"root"
+                     }
+                  }
+               },
+               "install_cassandra_20":{
+                  "packages":{
+                     "yum":{
+                        "dsc20":[
+
+                        ]
+                     }
+                  },
+                  "commands":{
+                     "set_listen_address":{
+                        "command":"sed -i -e \"s/listen_address:.*/listen_address: \\\"$(cat /tmp/eip.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_rpc_address":{
+                        "command":"sed -i -e \"s/rpc_address:.*/rpc_address: \\\"$(cat /tmp/eip.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_seed_address":{
+                        "command":"sed -i -e \"s/seeds:.*/seeds: \\\"$(cat /tmp/seeds.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_data_directory":{
+                        "command":"printf \"data_file_directories: \n          - /data\" | tee -a /etc/cassandra/default.conf/cassandra.yaml > /dev/null"
+                     },
+                     "set_commitlog_directory":{
+                        "command":"echo \"commitlog_directory: /commitlog\" | tee -a /etc/cassandra/default.conf/cassandra.yaml > /dev/null"
+                     },
+                     "set_cluster_name":{
+                        "command":"sed -i -e \"s/cluster_name:.*/cluster_name: \\\"$(cat /tmp/clustername.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "01_remove_data_dir":{
+                        "command":"sed -i -e \"/data_file_directories:/ { N; d; }\" /etc/cassandra/default.conf/cassandra.yaml"
+                     },
+                     "02_remove_commit_dir":{
+                        "command":"sed -i -e \"/commitlog_directory:/ { N; d; }\" /etc/cassandra/default.conf/cassandra.yaml"
+                     },
+                     "set_snitch":{
+                        "command":"sed -i -e \"s/endpoint_snitch:.*/endpoint_snitch: Ec2Snitch/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     }
+                  },
+                  "services":{
+                     "sysvinit":{
+                        "cassandra":{
+                           "enabled":"true",
+                           "ensureRunning":"true"
+                        }
+                     }
+                  }
+               },
+               "install_cassandra_21":{
+                  "packages":{
+                     "yum":{
+                        "dsc21":[
+
+                        ]
+                     }
+                  },
+                  "commands":{
+                     "set_listen_address":{
+                        "command":"sed -i -e \"s/listen_address:.*/listen_address: \\\"$(cat /tmp/eip.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_rpc_address":{
+                        "command":"sed -i -e \"s/rpc_address:.*/rpc_address: \\\"$(cat /tmp/eip.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_seed_address":{
+                        "command":"sed -i -e \"s/seeds:.*/seeds: \\\"$(cat /tmp/seeds.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_data_directory":{
+                        "command":"printf \"data_file_directories: \n          - /data\" | tee -a /etc/cassandra/default.conf/cassandra.yaml > /dev/null"
+                     },
+                     "set_commitlog_directory":{
+                        "command":"echo \"commitlog_directory: /commitlog\" | tee -a /etc/cassandra/default.conf/cassandra.yaml > /dev/null"
+                     },
+                     "set_cluster_name":{
+                        "command":"sed -i -e \"s/cluster_name:.*/cluster_name: \\\"$(cat /tmp/clustername.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "01_remove_data_dir":{
+                        "command":"sed -i -e \"/data_file_directories:/ { N; d; }\" /etc/cassandra/default.conf/cassandra.yaml"
+                     },
+                     "02_remove_commit_dir":{
+                        "command":"sed -i -e \"/commitlog_directory:/ { N; d; }\" /etc/cassandra/default.conf/cassandra.yaml"
+                     },
+                     "set_snitch":{
+                        "command":"sed -i -e \"s/endpoint_snitch:.*/endpoint_snitch: Ec2Snitch/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     }
+                  },
+                  "services":{
+                     "sysvinit":{
+                        "cassandra":{
+                           "enabled":"true",
+                           "ensureRunning":"true"
+                        }
+                     }
+                  }
+               },
+               "z_bounce_dse":{
+                  "commands":{
+                     "kill_dse":{
+                        "command":"service datastax-agent stop"
+                     }
+                  }
+               },
+               "y_install_monit":{
+                  "packages":{
+                     "yum":{
+                        "monit":[
+
+                        ]
+                     }
+                  },
+                  "files":{
+                     "/etc/monit.d/cassandramonit":{
+                        "content":{
+                           "Fn::Join":[
+                              "",
+                              [
+                                 "set daemon 60 with start delay 60 \n",
+                                 "check cassandra matching \"cassandra\" \n",
+                                 "    start program = \"/etc/init.d/cassandra start\" \n",
+                                 "    stop program = \"/etc/init.d/cassandra stop\" \n"
+                              ]
+                           ]
+                        }
+                     },
+                     "/etc/monit.d/dseagentmonit":{
+                        "content":{
+                           "Fn::Join":[
+                              "",
+                              [
+                                 "set daemon 180 with start delay 60 \n",
+                                 "check datastax-agent matching \"datastax-agent\" \n",
+                                 "    start program = \"/etc/init.d/datastax-agent start\" \n",
+                                 "    stop program = \"/etc/init.d/datastax-agent stop\" \n",
+                                 "    depends on agent.log \n",
+                                 "                         \n",
+                                 "check file agent.log with path /var/log/datastax-agent/agent.log \n",
+                                 "        if match \"ERROR\" then restart \n"
+                              ]
+                           ]
+                        }
+                     }
+                  },
+                  "services":{
+                     "sysvinit":{
+                        "monit":{
+                           "enabled":"true",
+                           "ensureRunning":"true"
+                        }
+                     }
+                  }
+               }
+            }
+         }
+      },
+      "CassandraNonSeedFleet":{
+         "Type":"AWS::AutoScaling::AutoScalingGroup",
+         "DependsOn":[
+            "CassandraNonSeedLaunchConfig",
+            "opscenterEIP"
+         ],
+         "UpdatePolicy":{
+            "AutoScalingRollingUpdate":{
+               "MaxBatchSize":"1",
+               "MinInstancesInService":"1",
+               "PauseTime":"PT2M30S"
+            }
+         },
+         "Properties":{
+            "VPCZoneIdentifier":[
+               {
+                  "Ref":"SecondSubnetId"
+               },
+               {
+                  "Ref":"ThirdSubnetId"
+               },
+               {
+                  "Ref":"FirstSubnetId"
+               }
+            ],
+            "LaunchConfigurationName":{
+               "Ref":"CassandraNonSeedLaunchConfig"
+            },
+            "MinSize":{
+               "Ref":"FleetSize"
+            },
+            "MaxSize":{
+               "Ref":"FleetSize"
+            },
+            "DesiredCapacity":{
+               "Ref":"FleetSize"
+            },
+            "Tags":[
+               {
+                  "Key":"Name",
+                  "Value":"Cassandra",
+                  "PropagateAtLaunch":"true"
+               }
+            ]
+         },
+         "CreationPolicy":{
+            "ResourceSignal":{
+               "Timeout":"PT30M",
+               "Count":{
+                  "Ref":"FleetSize"
+               }
+            }
+         }
+      },
+      "CassandraNonSeedScalingPolicy":{
+         "Type":"AWS::AutoScaling::ScalingPolicy",
+         "DependsOn":"CassandraNonSeedFleet",
+         "Properties":{
+            "AdjustmentType":"ChangeInCapacity",
+            "AutoScalingGroupName":{
+               "Ref":"CassandraNonSeedFleet"
+            },
+            "Cooldown":120,
+            "ScalingAdjustment":"1"
+         }
+      },
+      "CassandraNonSeedLaunchConfig":{
+         "Type":"AWS::AutoScaling::LaunchConfiguration",
+         "DependsOn":[
+            "SeedServer",
+            "opscenterEIP"
+         ],
+         "Properties":{
+            "InstanceType":{
+               "Ref":"InstanceType"
+            },
+            "BlockDeviceMappings":[
+               {
+                  "DeviceName":"/dev/xvdba",
+                  "Ebs":{
+                     "VolumeSize":{
+                        "Ref":"DataVolumeSize"
+                     },
+                     "VolumeType":{
+                        "Ref":"DataVolumeType"
+                     },
+                     "Iops":{
+                        "Fn::If":[
+                           "UseEBSPIOPSdata",
+                           {
+                              "Ref":"DataVolumeIOPS"
+                           },
+                           {
+                              "Ref":"AWS::NoValue"
+                           }
+                        ]
+                     },
+                     "Encrypted":{
+                        "Fn::If":[
+                           "UseEncryption",
+                           "True",
+                           "False"
+                        ]
+                     },
+                     "KmsKeyId":{
+                        "Fn::If":[
+                           "UseKMSKey",
+                           {
+                              "Ref":"AWS::NoValue"
+                           },
+                           {
+                              "Ref":"KMSKeyId"
+                           }
+                        ]
+                     }
+                  }
+               },
+               {
+                  "DeviceName":"/dev/xvdbb",
+                  "Ebs":{
+                     "VolumeSize":{
+                        "Ref":"CommitlogVolumeSize"
+                     },
+                     "VolumeType":{
+                        "Ref":"CommitlogVolumeType"
+                     },
+                     "Iops":{
+                        "Fn::If":[
+                           "UseEBSPIOPScommitlog",
+                           {
+                              "Ref":"CommitlogVolumeIOPS"
+                           },
+                           {
+                              "Ref":"AWS::NoValue"
+                           }
+                        ]
+                     },
+                     "Encrypted":{
+                        "Fn::If":[
+                           "UseEncryption",
+                           "True",
+                           "False"
+                        ]
+                     },
+                     "KmsKeyId":{
+                        "Fn::If":[
+                           "UseKMSKey",
+                           {
+                              "Ref":"AWS::NoValue"
+                           },
+                           {
+                              "Ref":"KMSKeyId"
+                           }
+                        ]
+                     }
+                  }
+               }
+            ],
+            "KeyName":{
+               "Ref":"SSHKeyName"
+            },
+            "EbsOptimized":{
+               "Fn::FindInMap":[
+                  "AWSInstanceType2Capabilites",
+                  {
+                     "Ref":"InstanceType"
+                  },
+                  "EBSOpt"
+               ]
+            },
+            "ImageId":{
+               "Fn::FindInMap":[
+                  "AWSAmazonLinuxAMI",
+                  {
+                     "Ref":"AWS::Region"
+                  },
+                  "201503"
+               ]
+            },
+            "SecurityGroups":[
+               {
+                  "Ref":"CassandraSecurityGroup"
+               }
+            ],
+            "IamInstanceProfile":{
+               "Ref":"CassandraProfile"
+            },
+            "InstanceMonitoring":"false",
+            "UserData":{
+               "Fn::Base64":{
+                  "Fn::Join":[
+                     "",
+                     [
+                        "#! /bin/bash -v\n",
+                        "mkdir -p /home/ec2-user/cassandra \n",
+                        "cd /home/ec2-user/cassandra \n",
+                        "until ping -c 1 google.com \n",
+                        "do \n",
+                        "sleep 5; \n",
+                        "done \n",
+                        "echo \"",
+                        {
+                           "Ref":"ClusterName"
+                        },
+                        "\" > /tmp/clustername.data \n",
+                        "echo \"",
+                        {
+                           "Fn::Join":[
+                              ",",
+                              [
+                                 {
+                                    "Fn::GetAtt":[
+                                       "FirstSeedENI",
+                                       "PrimaryPrivateIpAddress"
+                                    ]
+                                 },
+                                 {
+                                    "Fn::If":[
+                                       "LaunchSecondSeed",
+                                       {
+                                          "Fn::GetAtt":[
+                                             "SecondSeedENI",
+                                             "PrimaryPrivateIpAddress"
+                                          ]
+                                       },
+                                       {
+                                          "Ref":"AWS::NoValue"
+                                       }
+                                    ]
+                                 },
+                                 {
+                                    "Fn::If":[
+                                       "LaunchThirdSeed",
+                                       {
+                                          "Fn::GetAtt":[
+                                             "ThirdSeedENI",
+                                             "PrimaryPrivateIpAddress"
+                                          ]
+                                       },
+                                       {
+                                          "Ref":"AWS::NoValue"
+                                       }
+                                    ]
+                                 }
+                              ]
+                           ]
+                        },
+                        "\" > /tmp/seeds.data \n",
+                        "aws ec2 describe-instances --instance-ids $(curl -s curl http://169.254.169.254/latest/meta-data/instance-id/) --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        "|grep \"PrivateIpAddress\"|head -1|cut -d':' -f2|cut -d'\"' -f2 > /tmp/privateipcurrent.data\n",
+                        "aws ec2 describe-instances --instance-ids $(curl -s curl http://169.254.169.254/latest/meta-data/instance-id/) --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " > /tmp/describec2instance.data\n",
+                        "asgname=$(aws autoscaling describe-auto-scaling-instances --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " --instance-ids $(curl -s curl http://169.254.169.254/latest/meta-data/instance-id/)|grep AutoScalingGroupName|cut -d':' -f2|cut -d'\"' -f2) \n",
+                        "aws autoscaling describe-scaling-activities --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        " --auto-scaling-group-name $asgname > /tmp/asgactivity.data\n",
+                        "aws s3 cp s3://",
+                        {
+                           "Ref": "BuildBucket"
+                        },
+                        "/scripts/setupNonSeed.sh setupNonSeed.sh\n",
+                        "chmod +x setupNonSeed.sh \n",
+                        "./setupNonSeed.sh > install.log 2>&1 \n",
+                        "# Helper function\n",
+                        "function error_exit\n",
+                        "{\n",
+                        "  /opt/aws/bin/cfn-signal -e 1 --reason=\"$1\" --stack ",
+                        {
+                           "Ref":"AWS::StackName"
+                        },
+                        " --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        "  --resource=CassandraNonSeedFleet \n",
+                        "  exit 1\n",
+                        "}\n",
+                        "# Install packages\n",
+                        "/opt/aws/bin/cfn-init -s ",
+                        {
+                           "Ref":"AWS::StackId"
+                        },
+                        " -r CassandraNonSeedLaunchConfig ",
+                        "    --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        "\n",
+                        "# All is well so signal success\n",
+                        "  /opt/aws/bin/cfn-signal -e 0 --reason=\"Non SeedServer setup complete\" --stack ",
+                        {
+                           "Ref":"AWS::StackName"
+                        },
+                        " --region ",
+                        {
+                           "Ref":"AWS::Region"
+                        },
+                        "  --resource=CassandraNonSeedFleet \n"
+                     ]
+                  ]
+               }
+            }
+         },
+         "Metadata":{
+            "AWS::CloudFormation::Init":{
+               "configSets":{
+                  "default":[
+                     "configure_hosts",
+                     {
+                        "Fn::If":[
+                           "Installjava7",
+                           "install_java7",
+                           "install_java8"
+                        ]
+                     },
+                     "install_repo",
+                     "install_jna",
+                     {
+                        "Fn::If":[
+                           "Installdsc20",
+                           "install_cassandra_20",
+                           "install_cassandra_21"
+                        ]
+                     },
+                     "remove_replace_node",
+                     "install_dse_agents",
+                     "y_install_monit",
+                     "z_bounce_dse"
+                  ]
+               },
+               "configure_hosts":{
+                  "commands":{
+                     "01-create_hosts_entry-on_boot":{
+                        "command":"echo \"`curl -s curl http://169.254.169.254/latest/meta-data/local-ipv4` `hostname`\" >>/etc/hosts",
+                        "test":"test ! -f .create_hosts_entry-semaphore"
+                     },
+                     "02-signal_startup_complete":{
+                        "command":"touch .create_hosts_entry-semaphore"
+                     }
+                  }
+               },
+               "install_java7":{
+                  "packages":{
+                     "yum":{
+                        "java-1.7.0-openjdk-devel":[
+
+                        ]
+                     }
+                  },
+                  "commands":{
+                     "use_java7":{
+                        "command":"alternatives --set java /usr/lib/jvm/jre-1.7.0-openjdk.x86_64/bin/java"
+                     }
+                  }
+               },
+               "install_java8":{
+                  "packages":{
+                     "yum":{
+                        "java-1.8.0-openjdk-devel":[
+
+                        ]
+                     }
+                  },
+                  "commands":{
+                     "use_java8":{
+                        "command":"alternatives --set java /usr/lib/jvm/jre-1.8.0-openjdk.x86_64/bin/java"
+                     }
+                  }
+               },
+               "install_jna":{
+                  "packages":{
+                     "yum":{
+                        "jna":[
+
+                        ]
+                     }
+                  }
+               },
+               "install_dse_agents":{
+                  "packages":{
+                     "yum":{
+                        "datastax-agent":[
+
+                        ]
+                     }
+                  },
+                  "files":{
+                     "/var/lib/datastax-agent/conf/address.yaml":{
+                        "content":{
+                           "Fn::Join":[
+                              "",
+                              [
+                                 "stomp_interface: ",
+                                 {
+                                    "Fn::GetAtt":[
+                                       "OpsCenterENI",
+                                       "PrimaryPrivateIpAddress"
+                                    ]
+                                 },
+                                 "\n"
+                              ]
+                           ]
+                        }
+                     }
+                  },
+                  "services":{
+                     "sysvinit":{
+                        "datastax-agent":{
+                           "enabled":"true",
+                           "ensureRunning":"true"
+                        }
+                     }
+                  }
+               },
+               "install_repo":{
+                  "files":{
+                     "/etc/yum.repos.d/datastax.repo":{
+                        "content":{
+                           "Fn::Join":[
+                              "\n",
+                              [
+                                 "[datastax]",
+                                 "name = DataStax Repo for Apache Cassandra",
+                                 "baseurl = http://rpm.datastax.com/community",
+                                 "enabled = 1",
+                                 "gpgcheck = 0"
+                              ]
+                           ]
+                        },
+                        "mode":"000644",
+                        "owner":"root",
+                        "group":"root"
+                     }
+                  }
+               },
+               "install_cassandra_20":{
+                  "packages":{
+                     "yum":{
+                        "dsc20":[
+
+                        ]
+                     }
+                  },
+                  "commands":{
+                     "set_listen_address":{
+                        "command":"sed -i -e \"s/listen_address:.*/listen_address: \\\"$(curl -s curl http://169.254.169.254/latest/meta-data/local-ipv4)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_rpc_address":{
+                        "command":"sed -i -e \"s/rpc_address:.*/rpc_address: \\\"$(curl -s curl http://169.254.169.254/latest/meta-data/local-ipv4)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_seed_address":{
+                        "command":"sed -i -e \"s/seeds:.*/seeds: \\\"$(cat /tmp/seeds.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_data_directory":{
+                        "command":"printf \"data_file_directories: \n          - /data\" | tee -a /etc/cassandra/default.conf/cassandra.yaml > /dev/null"
+                     },
+                     "set_commitlog_directory":{
+                        "command":"echo \"commitlog_directory: /commitlog\" | tee -a /etc/cassandra/default.conf/cassandra.yaml > /dev/null"
+                     },
+                     "set_cluster_name":{
+                        "command":"sed -i -e \"s/cluster_name:.*/cluster_name: \\\"$(cat /tmp/clustername.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_replace_node":{
+                        "command":"if [ -f /tmp/privateip.data ]; then echo \"$(cat /tmp/privateip.data)\" | tee -a /etc/cassandra/default.conf/cassandra-env.sh > /dev/null; fi"
+                     },
+                     "01_remove_data_dir":{
+                        "command":"sed -i -e \"/data_file_directories:/ { N; d; }\" /etc/cassandra/default.conf/cassandra.yaml"
+                     },
+                     "02_remove_commit_dir":{
+                        "command":"sed -i -e \"/commitlog_directory:/ { N; d; }\" /etc/cassandra/default.conf/cassandra.yaml"
+                     },
+                     "set_snitch":{
+                        "command":"sed -i -e \"s/endpoint_snitch:.*/endpoint_snitch: Ec2Snitch/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "z_sleep":{
+                        "command":"sleep $(cat /tmp/sleeptime)"
+                     }
+                  },
+                  "services":{
+                     "sysvinit":{
+                        "cassandra":{
+                           "enabled":"true",
+                           "ensureRunning":"true"
+                        }
+                     }
+                  }
+               },
+               "install_cassandra_21":{
+                  "packages":{
+                     "yum":{
+                        "dsc21":[
+
+                        ]
+                     }
+                  },
+                  "commands":{
+                     "set_listen_address":{
+                        "command":"sed -i -e \"s/listen_address:.*/listen_address: \\\"$(curl -s curl http://169.254.169.254/latest/meta-data/local-ipv4)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_rpc_address":{
+                        "command":"sed -i -e \"s/rpc_address:.*/rpc_address: \\\"$(curl -s curl http://169.254.169.254/latest/meta-data/local-ipv4)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_seed_address":{
+                        "command":"sed -i -e \"s/seeds:.*/seeds: \\\"$(cat /tmp/seeds.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_data_directory":{
+                        "command":"printf \"data_file_directories: \n          - /data\" | tee -a /etc/cassandra/default.conf/cassandra.yaml > /dev/null"
+                     },
+                     "set_commitlog_directory":{
+                        "command":"echo \"commitlog_directory: /commitlog\" | tee -a /etc/cassandra/default.conf/cassandra.yaml > /dev/null"
+                     },
+                     "set_cluster_name":{
+                        "command":"sed -i -e \"s/cluster_name:.*/cluster_name: \\\"$(cat /tmp/clustername.data)\\\"/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "set_replace_node":{
+                        "command":"if [ -f /tmp/privateip.data ]; then echo \"$(cat /tmp/privateip.data)\" | tee -a /etc/cassandra/default.conf/cassandra-env.sh > /dev/null; fi"
+                     },
+                     "01_remove_data_dir":{
+                        "command":"sed -i -e \"/data_file_directories:/ { N; d; }\" /etc/cassandra/default.conf/cassandra.yaml"
+                     },
+                     "02_remove_commit_dir":{
+                        "command":"sed -i -e \"/commitlog_directory:/ { N; d; }\" /etc/cassandra/default.conf/cassandra.yaml"
+                     },
+                     "set_snitch":{
+                        "command":"sed -i -e \"s/endpoint_snitch:.*/endpoint_snitch: Ec2Snitch/\" /etc/cassandra/default.conf/cassandra.yaml "
+                     },
+                     "z_sleep":{
+                        "command":"sleep $(cat /tmp/sleeptime)"
+                     }
+                  },
+                  "services":{
+                     "sysvinit":{
+                        "cassandra":{
+                           "enabled":"true",
+                           "ensureRunning":"true"
+                        }
+                     }
+                  }
+               },
+               "remove_replace_node":{
+                  "commands":{
+                     "remove_command":{
+                        "command":"if [ -f /tmp/privateip.data ]; then dollar='$'; sed -i -e \"${dollar}d\" /etc/cassandra/default.conf/cassandra-env.sh; rm -f /tmp/privateip.data; fi"
+                     }
+                  }
+               },
+               "z_bounce_dse":{
+                  "commands":{
+                     "kill_dse":{
+                        "command":"service datastax-agent stop"
+                     }
+                  }
+               },
+               "y_install_monit":{
+                  "packages":{
+                     "yum":{
+                        "monit":[
+
+                        ]
+                     }
+                  },
+                  "files":{
+                     "/etc/monit.d/cassandramonit":{
+                        "content":{
+                           "Fn::Join":[
+                              "",
+                              [
+                                 "set daemon 60 with start delay 60 \n",
+                                 "check cassandra matching \"cassandra\" \n",
+                                 "   start program = \"/etc/init.d/cassandra start\" \n",
+                                 "   stop program = \"/etc/init.d/cassandra stop\" \n"
+                              ]
+                           ]
+                        }
+                     },
+                     "/etc/monit.d/dseagentmonit":{
+                        "content":{
+                           "Fn::Join":[
+                              "",
+                              [
+                                 "set daemon 180 with start delay 60 \n",
+                                 "check datastax-agent matching \"datastax-agent\" \n",
+                                 "    start program = \"/etc/init.d/datastax-agent start\" \n",
+                                 "    stop program = \"/etc/init.d/datastax-agent stop\" \n",
+                                 "    depends on agent.log \n",
+                                 "                         \n",
+                                 "check file agent.log with path /var/log/datastax-agent/agent.log \n",
+                                 "        if match \"ERROR\" then restart \n"
+                              ]
+                           ]
+                        }
+                     }
+                  },
+                  "services":{
+                     "sysvinit":{
+                        "monit":{
+                           "enabled":"true",
+                           "ensureRunning":"true"
+                        }
+                     }
+                  }
+               }
+            }
+         }
+      }
+   },
+   "Outputs":{
+      "opscenterurl":{
+         "Description":"Opscenter URL.",
+         "Value":{
+            "Fn::Join":[
+               "",
+               [
+                  "http://",
+                  {
+                     "Ref":"opscenterEIP"
+                  },
+                  ":8888/"
+               ]
+            ]
+         }
+      },
+      "seednodeIP":{
+         "Description":"Private IP of one of the seed nodes.Please enter this IP Address in opscenter console to manage the newly created cluster",
+         "Value":{
+            "Fn::Join":[
+               "",
+               [
+                  {
+                     "Fn::GetAtt":[
+                        "FirstSeedENI",
+                        "PrimaryPrivateIpAddress"
+                     ]
+                  },
+                  ""
+               ]
+            ]
+         }
+      }
+   }
+}
